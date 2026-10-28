@@ -1,0 +1,45 @@
+
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #f1f5f9;
+  background: #0f172a;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 1000px;
+  margin: auto;
+  padding: 40px 24px;
+}
+
+header {
+  margin-bottom: 40px;
+}
+
+h1 {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+p {
+  color: #94a3b8;
+}
+
+section {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+input {
+  margin: 20px 0;
+}
+
+video {
+  margin-top: 16px;
+  border-radius: 8px;
+  background: black;
+}
