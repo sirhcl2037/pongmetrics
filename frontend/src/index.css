@@ -43,3 +43,38 @@ video {
   border-radius: 8px;
   background: black;
 }
+
+.annotation-controls {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.annotation-controls button,
+.shot-entry button {
+  padding: 10px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.annotation-controls button:hover,
+.shot-entry button:hover {
+  background: #1d4ed8;
+}
+
+select {
+  padding: 8px;
+  margin: 12px;
+  border-radius: 6px;
+}
+
+.shot-entry {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid #475569;
+}
