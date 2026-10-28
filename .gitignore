@@ -39,6 +39,10 @@ build/Release
 
 # Dependency directories
 node_modules/
+experiments/ball_detection/.venv/
+experiments/ball_detection/vendor/
+experiments/ball_detection/*.pth
+experiments/ball_detection/output/
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)

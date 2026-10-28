@@ -1,15 +1,12 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { VideoWorkspace } from './VideoWorkspace';
+import { defaultPlayers, type Player, type Shot } from './session';
+import { PlayerSetup } from './PlayerSetup';
 
 type Wing = "FH" | "BH";
 type Stroke = "Loop" | "Drive" | "Push" | "Block" | "Other";
 
-type Shot = {
-  id: number;
-  time: number;
-  wing: Wing;
-  stroke: Stroke;
-};
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -17,6 +14,11 @@ function App() {
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoName, setVideoName] = useState("");
+  const [videoSize, setVideoSize] = useState(0);
+  const [players, setPlayers] = useState<Player[]>(defaultPlayers);
+  const [selectedPlayerId, setSelectedPlayerId] = useState('player-1');
+  const [autoSwitchPlayers, setAutoSwitchPlayers] = useState(false);
+  const [locatingPlayerId, setLocatingPlayerId] = useState<string | null>(null);
   const [shots, setShots] = useState<Shot[]>([]);
   const [stroke, setStroke] = useState<Stroke>("Loop");
   const [currentTime, setCurrentTime] = useState(0);
@@ -35,6 +37,8 @@ function App() {
 
     setVideoUrl(URL.createObjectURL(file));
     setVideoName(file.name);
+    setVideoSize(file.size);
+    setPlayers(defaultPlayers()); setSelectedPlayerId('player-1'); setLocatingPlayerId(null);
     setShots([]);
     setCurrentTime(0);
     setFilter("All");
@@ -45,11 +49,14 @@ function App() {
   function addShot(wing: Wing) {
     if (!videoRef.current) return;
 
-    const time = Number(videoRef.current.currentTime.toFixed(2));
+    const time = videoRef.current.currentTime;
 
     const shot: Shot = {
       id: nextId.current++,
       time,
+      source: 'manual',
+      playerId: selectedPlayerId,
+      playerIdentity: { value: selectedPlayerId, source: 'manual' },
       wing,
       stroke
     };
@@ -57,6 +64,10 @@ function App() {
     setShots(previous =>
         [...previous, shot].sort((a, b) => a.time - b.time)
     );
+
+    if (autoSwitchPlayers) {
+      setSelectedPlayerId(players.find(player => player.id !== selectedPlayerId)?.id ?? selectedPlayerId);
+    }
   }
 
   function removeShot(id: number) {
@@ -87,14 +98,14 @@ function App() {
       </header>
       <main>
         <div className="page-heading">
-          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Every shot tells a story.</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
+          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Professional Grade Deep Analysisnpm audit fix</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
           <button className="upload-button" onClick={() => fileRef.current?.click()}><span aria-hidden="true">↑</span> {videoUrl ? 'Change video' : 'Upload match'}</button>
           <input ref={fileRef} className="visually-hidden" type="file" accept="video/*" onChange={uploadVideo} aria-label="Upload match video" />
         </div>
         <div className="workspace-grid">
           <section className="panel video-panel" aria-labelledby="video-heading">
             <div className="panel-heading"><div className="heading-with-dot"><i /><h2 id="video-heading">Match review</h2></div><span className="small-label">{videoUrl ? 'READY TO ANNOTATE' : 'START HERE'}</span></div>
-            {videoUrl ? <div className="video-stage"><video ref={videoRef} src={videoUrl} controls onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} /></div> :
+            {videoUrl ? <VideoWorkspace key={videoUrl} url={videoUrl} name={videoName} size={videoSize} videoRef={videoRef} shots={shots} players={players} selectedPlayerId={selectedPlayerId} onPlayers={setPlayers} onSelectPlayer={setSelectedPlayerId} locatingPlayerId={locatingPlayerId} onLocate={setLocatingPlayerId} onShots={imported => { setShots(imported); nextId.current = Math.max(-1, ...imported.map(s => s.id)) + 1; }} onTime={setCurrentTime} /> :
               <button className="upload-stage" onClick={() => fileRef.current?.click()}>
                 <span className="table-illustration" aria-hidden="true"><span className="table-net" /><span className="table-ball" /></span>
                 <span className="upload-title">Bring your game into focus</span>
@@ -106,6 +117,7 @@ function App() {
           <section className="panel annotation-panel" aria-labelledby="annotation-heading">
             <div className="panel-heading"><h2 id="annotation-heading">Tag a shot</h2><span className="step-badge">01</span></div>
             <div className="annotation-body">
+              <PlayerSetup players={players} selected={selectedPlayerId} onSelect={setSelectedPlayerId} onChange={setPlayers} enabled={!!videoUrl} autoSwitch={autoSwitchPlayers} onAutoSwitch={setAutoSwitchPlayers} onAssociate={id => { videoRef.current?.pause(); setLocatingPlayerId(id); }} />
               <div className="timestamp"><span className="eyebrow">CURRENT POSITION</span><strong>{timestamp(currentTime)}</strong><span>Tags are saved at this timestamp</span></div>
               <div className="field-heading"><span id="stroke-label">Stroke type</span><span>SELECT ONE</span></div>
               <div className="stroke-options" role="group" aria-labelledby="stroke-label">{(['Loop', 'Drive', 'Push', 'Block', 'Other'] as const).map(type => <button key={type} aria-pressed={stroke === type} className={stroke === type ? 'stroke-option selected' : 'stroke-option'} onClick={() => setStroke(type)}>{type}</button>)}</div>
@@ -123,8 +135,8 @@ function App() {
         </section>
         <section className="panel timeline-panel" aria-labelledby="timeline-heading">
           <div className="panel-heading timeline-heading"><div className="timeline-title"><h2 id="timeline-heading">Shot timeline</h2><span className="count-badge">{shots.length}</span></div><div className="filter-options" role="group" aria-label="Filter shots by wing">{(['All', 'FH', 'BH'] as const).map(value => <button key={value} aria-pressed={filter === value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value === 'All' ? 'All shots' : value === 'FH' ? 'Forehand' : 'Backhand'}</button>)}</div></div>
-          {visibleShots.length ? <div className="shot-list"><div className="shot-table-heading"><span>SHOT</span><span>TIMESTAMP</span><span>WING</span><span>STROKE</span><span /></div>{visibleShots.map(shot => <div className="shot-entry" key={shot.id}><span className="shot-number">#{(shots.indexOf(shot) + 1).toString().padStart(2, '0')}</span><button className="time-link" onClick={() => jumpTo(shot.time)} aria-label={`Jump to ${timestamp(shot.time)}`}><span aria-hidden="true">▷</span> {timestamp(shot.time)}</button><span className={`wing-tag ${shot.wing === 'FH' ? 'fh-tag' : 'bh-tag'}`}>{shot.wing === 'FH' ? 'Forehand' : 'Backhand'}</span><span className="stroke-name">{shot.stroke}</span><button className="remove-button" onClick={() => removeShot(shot.id)} aria-label={`Remove shot ${shots.indexOf(shot) + 1}`} title="Remove shot">×</button></div>)}</div> : <div className="timeline-empty"><span className="empty-icon" aria-hidden="true">≡</span><h3>{shots.length ? 'No shots in this view' : 'Your rally starts here'}</h3><p>{shots.length ? 'Try a different wing filter to see your tagged shots.' : 'Tagged shots appear here. Click a timestamp to revisit the moment.'}</p></div>}
-          <div className="timeline-footer"><span>{visibleShots.length} {visibleShots.length === 1 ? 'shot' : 'shots'} shown</span><span>Annotations reset when you change videos or reload.</span></div>
+          {visibleShots.length ? <div className="shot-list"><div className="shot-table-heading"><span>SHOT</span><span>TIMESTAMP</span><span>WING</span><span>STROKE</span><span /></div>{visibleShots.map(shot => <div className="shot-entry" key={shot.id}><span className="shot-number">#{(shots.indexOf(shot) + 1).toString().padStart(2, '0')}</span><button className="time-link" onClick={() => jumpTo(shot.time)} aria-label={`Jump to ${timestamp(shot.time)}`}><span aria-hidden="true">▷</span> {timestamp(shot.time)}</button><span className={`wing-tag ${shot.wing === 'FH' ? 'fh-tag' : 'bh-tag'}`}>{shot.wing === 'FH' ? 'Forehand' : 'Backhand'}</span><span className="stroke-name">{shot.stroke}<br /><small>{players.find(p => p.id === shot.playerId)?.name ?? 'Unassigned'}</small></span><button className="remove-button" onClick={() => removeShot(shot.id)} aria-label={`Remove shot ${shots.indexOf(shot) + 1}`} title="Remove shot">×</button></div>)}</div> : <div className="timeline-empty"><span className="empty-icon" aria-hidden="true">≡</span><h3>{shots.length ? 'No shots in this view' : 'Your rally starts here'}</h3><p>{shots.length ? 'Try a different wing filter to see your tagged shots.' : 'Tagged shots appear here. Click a timestamp to revisit the moment.'}</p></div>}
+          <div className="timeline-footer"><span>{visibleShots.length} {visibleShots.length === 1 ? 'shot' : 'shots'} shown</span><span>Export JSON to save annotations before changing videos or reloading.</span></div>
         </section>
         <footer className="page-footer"><span>PONGMETRICS</span><span>A closer look at your game.</span></footer>
       </main>
