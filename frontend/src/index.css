@@ -9,6 +9,37 @@
 }
 
 * { box-sizing: border-box; }
+.calibration-overlay .ball-trajectory polyline { stroke: #ffe875; stroke-width: 2; }
+.calibration-overlay .ball-trajectory ellipse { fill: #ffe875; stroke: #111; stroke-width: 1.5; }
+.player-setup { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #44343c; }
+.player-setup h3 { font-size: 13px; }
+.player-setup p { color: #bdabb3; font-size: 11px; line-height: 1.5; margin: 8px 0; }
+.auto-switch { display: flex; align-items: center; gap: 9px; margin: 12px 0; padding: 10px; border: 1px solid #44363d; border-radius: 6px; background: #211b1f; cursor: pointer; }
+.auto-switch input { accent-color: #ef4444; margin: 0; }
+.auto-switch-copy { display: flex; flex-direction: column; gap: 3px; }
+.auto-switch-copy strong { font-size: 11px; font-weight: 600; color: #efdae4; }
+.auto-switch-copy small { color: #ae99a2; font-size: 10px; }
+.player-row { display: flex; gap: 6px; margin: 8px 0; }
+.player-row input { min-width: 0; width: 100%; }
+.player-row input, .player-row button { border: 1px solid #58464f; background: #2b2529; color: #efdae4; border-radius: 5px; padding: 7px; font-size: 11px; }
+.player-row button { white-space: nowrap; }
+.player-row button[aria-pressed=true] { border-color: #ef4444; background: #493039; }
+.video-image-wrapper { position: relative; width: 100%; }
+.video-image-wrapper video { object-fit: contain; }
+.calibration-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.calibration-overlay.interactive { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.calibration-overlay polyline { fill: none; stroke: #ff858e; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.calibration-overlay .table-grid-line { stroke-dasharray: 5 5; }
+.calibration-overlay ellipse { fill: #ef4444; stroke: white; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.calibration-overlay text { fill: white; paint-order: stroke; stroke: #111; stroke-width: .003; }
+.calibration-controls { padding: 18px 22px; border-top: 1px solid #342d30; }
+.workspace-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.workspace-tools button, .workspace-tools input { background: #2b2529; color: #efdae4; border: 1px solid #58464f; padding: 8px; border-radius: 5px; font-size: 12px; }
+.workspace-tools button[aria-pressed=true] { border-color: #ef4444; }
+.workspace-tools input { width: 65px; margin-left: 6px; }
+.workspace-tools label { font-size: 12px; }
+.calibration-controls p { font-size: 11px; color: #bdabb3; line-height: 1.6; margin: 10px 0; }
+.calibration-controls output { color: #ff9da9; font-family: monospace; font-size: 13px; }
 body { margin: 0; min-width: 320px; }
 button, input { font: inherit; }
 button { cursor: pointer; transition: background .18s, border-color .18s, transform .18s; }
