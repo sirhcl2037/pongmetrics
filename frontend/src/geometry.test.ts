@@ -1,5 +1,4 @@
 import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
 import { parseSession, defaultPlayers } from './session.ts';
 import { ballTrail, parseDetections } from './ballDetections.ts';
