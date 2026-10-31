@@ -43,6 +43,7 @@ experiments/ball_detection/.venv/
 experiments/ball_detection/vendor/
 experiments/ball_detection/*.pth
 experiments/ball_detection/output/
+experiments/ball_detection/__pycache__/
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
