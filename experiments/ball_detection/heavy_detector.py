@@ -1,12 +1,29 @@
 """TrackNet recovery using the same preprocessing as detect.py."""
+import json
 import cv2
 import numpy as np
-import torch
-from detect import TrackNet, ROOT
+
+
+class CachedHeavyDetector:
+    """Fast replay of saved TrackNet detections; no neural inference occurs."""
+    def __init__(self, path):
+        with open(path,encoding='utf8') as f:
+            data=json.load(f)
+        self.fps=data['fps']
+        self.points={round(o['timestamp']*self.fps):(np.array([o['position']['value']['x'],o['position']['value']['y']]),o['position'].get('confidence',1)) for o in data['ballObservations']}
+        self.calls=0
+
+    def detect(self,timestamp):
+        self.calls+=1
+        value=self.points.get(round(timestamp*self.fps))
+        return (value[0],value[1]) if value else None
 
 
 class HeavyDetector:
     def __init__(self, video, end):
+        import torch
+        from detect import TrackNet, ROOT
+
         torch.set_num_threads(4)
         cap = cv2.VideoCapture(str(video))
         self.fps = cap.get(cv2.CAP_PROP_FPS)
@@ -30,6 +47,8 @@ class HeavyDetector:
         self.calls = 0
 
     def detect(self,timestamp):
+        import torch
+
         i = round(timestamp*self.fps)
         if not 0 <= i < len(self.frames):
             return None
