@@ -6,11 +6,28 @@ Latest optimization pass (not tested): candidate components are formed before th
 
 Heavy calls now default to a maximum of 20 per run, including cached lookups. Repeated heavy misses use retry intervals of 2, 4, 8, then 16 frames. Successful recovery clears backoff; recovery after more than five lost frames clears stale velocity. Budget exhaustion can reduce recall and leaves subsequent cheap detections unverified. This enforces a cost cap; it does not demonstrate baseline accuracy within that cap. For an unlimited reference replay on every post-seed frame use `--verify-every 1 --max-heavy-calls 0`. Cached replay imports no PyTorch/model code, but still decodes the source video. Historical measurements below predate this pass.
 
-`fast_track.py` is a separate, experimental color/motion tracker using OpenCV and NumPy. The initial clear seed classifies white-ball appearance once. It locks HSV brightness/saturation bounds and an 8-unit CIE Lab chroma radius around the seed patch median; candidates outside that color sample are rejected. Orange seeds are unsupported. Supply a clear ball seed as seconds and normalized x/y:
+`fast_track.py` is a separate, experimental color/motion tracker using OpenCV and NumPy. The initial clear seed classifies white-ball appearance once. It locks HSV brightness/saturation bounds and an 8-unit CIE Lab chroma radius around the seed patch median; at least 70% of each candidate's pixels must fall within that chroma radius. Orange seeds are unsupported. Supply a clear ball seed as seconds and normalized x/y:
 
 ```powershell
 experiments/ball_detection/.venv/Scripts/python.exe experiments/ball_detection/fast_track.py 'path/to/clip.mp4' --seed 2.0 .5308287 .4364107
 ```
+
+The command above uses only the cheap tracker. To reuse saved heavy detections without running the neural network:
+
+```powershell
+experiments/ball_detection/.venv/Scripts/python.exe experiments/ball_detection/fast_track.py 'path/to/clip.mp4' --seed 2.0 .5308287 .4364107 --end 8.28 --cached-heavy-json experiments/ball_detection/output/detections.json --output experiments/ball_detection/output/cached-track.json
+```
+
+Use the same source video and timeline as the saved detections. This cache contains heavy observation positions, not decoded frames or precomputed color features. Frames missing from the saved observations return a detector gap. Choose either `--cached-heavy-json` or `--heavy`.
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `--max-heavy-calls` | `20` | Caps inference calls or cached lookups; `0` allows unlimited calls. |
+| `--verify-every` | `5` | Verification interval while tracking, subject to budget and retry backoff; `1` disables backoff. |
+| `--min-color-score` | `0.93` | Candidate score must exceed this threshold. |
+| `--ambiguity-margin` | `0.18` | Best candidate must beat the runner-up by more than this margin. |
+
+The seed consumes no heavy call. Output summary fields `heavyCalls`, `maxHeavyCalls`, and `heavyBudgetExhausted` expose budget use. Once the budget runs out, the tracker can continue cheap tracking, but after more than five misses it stops candidate searches and needs heavy recovery. A cap of 20 does not guarantee recovery throughout a clip.
 
 It searches near a constant-velocity prediction for small moving white components scored by proximity, saturation, seed chroma, local brightness contrast, and motion, rejects ambiguous candidates, and stores one record per frame. Records distinguish `seed`, `detected`, `predicted`, and `lost`; match scores are heuristic, not calibrated correctness. After five missed frames, `needsDetector` signals that a heavy detector should reinitialize position and velocity. With `--heavy`, real TrackNet inference handles uncertainty and periodic verification subject to the budget and retry backoff above. Strong visual candidates in heavy-detector gaps are retained as `recoveryCandidate` with `reviewRequired`, separately from predictions and accepted observations. Its experimental JSON is deliberately separate from the app's detection import so predictions cannot appear as confirmed observations. Working coordinates use a 640x360 image; estimates can move outside the image during loss.
 
@@ -52,4 +69,4 @@ After accuracy is accepted, export with [torch.onnx.export](https://docs.pytorch
 
 White-only revision: synthetic checks passed for moving white selection, orange rejection, and stationary rejection. On the same 157-frame segment it accepted one candidate, predicted five frames, then marked 150 lost (0.310 seconds including decoding). This conservative result is not an accuracy improvement. After loss it waits for detector recovery instead of choosing arbitrary candidates from a growing region; this earlier result used color-only mode.
 
-The false candidate shown near the far player's face scored 0.90 under the HSV-only filter. Its seed chroma was Lab a/b=(128,122); candidate pixels were around (134,132), outside the new radius 8. A targeted replay of frame 6.84 s rejects that candidate. The full clip was not rerun after this filter change.
+The false candidate shown near the far player's face scored 0.90 under the HSV-only filter. Its seed chroma was Lab a/b=(128,122); candidate pixels were around (134,132), outside radius 8. A targeted replay of frame 6.84 s rejected that candidate. A subsequent cached-heavy replay of the 157-frame segment, using `--min-color-score .8 --ambiguity-margin .08` before the latest optimization pass, accepted 29 cheap detections and made 127 cached lookups (77 detections, 50 gaps). All 106 accepted post-seed detections matched saved heavy detections within 2.89 pixels; there were no additional accepted detections in heavy gaps. This measures agreement with the saved model, not ground-truth accuracy. These counts used the previous unlimited fallback behavior and do not describe the current 20-call default. No tests or inference runs were performed for the latest optimization pass.
