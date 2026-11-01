@@ -2,6 +2,8 @@
 
 ## Fast tracking prototype
 
+Heavy recovery now defaults to a 256x144 crop in the model's 512x288 image space, centered on the predicted ball. All four frames and the background share the same crop; coordinates are mapped back to the full image. The downloaded weights are unchanged. This uses one-quarter of the full-frame input pixels without shrinking the ball; actual speed and accuracy are unmeasured. After two failed heavy checks, recovery uses the full frame. Cheap misses alone do not trigger full-frame inference; crops center on the last observation. Each attempt consumes one call from the existing budget. `--full-frame-heavy` disables cropping for reference runs. Summary fields `heavyCropCalls` and `heavyFullFrameCalls` count real inference attempts; cached full-frame observations cannot evaluate crop accuracy. No tests were run for this change.
+
 Latest optimization pass (not tested): candidate components are formed before the Lab and motion gates, requiring at least 70% of component pixels to match the locked seed chroma. Signed brightness change rejects vacated bright spots (mean change must exceed 3 and at least 15% of pixels must brighten by more than 10). Component statistics use bounding-box slices instead of rescanning the full search area for each candidate. These gates can also reject real balls with little brightness change; accuracy needs evaluation.
 
 Heavy calls now default to a maximum of 20 per run, including cached lookups. Repeated heavy misses use retry intervals of 2, 4, 8, then 16 frames. Successful recovery clears backoff; recovery after more than five lost frames clears stale velocity. Budget exhaustion can reduce recall and leaves subsequent cheap detections unverified. This enforces a cost cap; it does not demonstrate baseline accuracy within that cap. For an unlimited reference replay on every post-seed frame use `--verify-every 1 --max-heavy-calls 0`. Cached replay imports no PyTorch/model code, but still decodes the source video. Historical measurements below predate this pass.
@@ -24,10 +26,10 @@ Use the same source video and timeline as the saved detections. This cache conta
 | --- | --- | --- |
 | `--max-heavy-calls` | `20` | Caps inference calls or cached lookups; `0` allows unlimited calls. |
 | `--verify-every` | `5` | Verification interval while tracking, subject to budget and retry backoff; `1` disables backoff. |
-| `--min-color-score` | `0.93` | Candidate score must exceed this threshold. |
-| `--ambiguity-margin` | `0.18` | Best candidate must beat the runner-up by more than this margin. |
+| `--min-color-score` | `0.75` | Candidate score must exceed this threshold. |
+| `--ambiguity-margin` | `0.08` | Best candidate must beat the runner-up by more than this margin. |
 
-The seed consumes no heavy call. Output summary fields `heavyCalls`, `maxHeavyCalls`, and `heavyBudgetExhausted` expose budget use. Once the budget runs out, the tracker can continue cheap tracking, but after more than five misses it stops candidate searches and needs heavy recovery. A cap of 20 does not guarantee recovery throughout a clip.
+The seed consumes no heavy call. Output summary fields `heavyCalls`, `maxHeavyCalls`, and `heavyBudgetExhausted` expose budget use. Once the budget runs out, the tracker can continue cheap tracking. After more than five misses, wide-search candidates are retained for review but cannot reinitialize the tracker without heavy confirmation. A cap of 20 does not guarantee recovery throughout a clip.
 
 It searches near a constant-velocity prediction for small moving white components scored by proximity, saturation, seed chroma, local brightness contrast, and motion, rejects ambiguous candidates, and stores one record per frame. Records distinguish `seed`, `detected`, `predicted`, and `lost`; match scores are heuristic, not calibrated correctness. After five missed frames, `needsDetector` signals that a heavy detector should reinitialize position and velocity. With `--heavy`, real TrackNet inference handles uncertainty and periodic verification subject to the budget and retry backoff above. Strong visual candidates in heavy-detector gaps are retained as `recoveryCandidate` with `reviewRequired`, separately from predictions and accepted observations. Its experimental JSON is deliberately separate from the app's detection import so predictions cannot appear as confirmed observations. Working coordinates use a 640x360 image; estimates can move outside the image during loss.
 
@@ -60,6 +62,16 @@ Input is BGR 512×288, median background plus four frames (15 channels). Trainin
 `output/detections.json` contains normalized image positions using `Observation<Point>`, actual decoder timestamps in seconds, FPS, matching video metadata, and model provenance. `audit.json` includes every analyzed frame and the reason for missing observations. Review sheets overlay sampled detections on the decoded video. Sampled sheets support qualitative inspection; they do not establish dataset precision/recall. Unreviewed frames are not ground truth.
 
 Load the original clip in PongMetrics, choose **Import ball detections**, and select the JSON. The dot updates on decoded video frame callbacks. A short trail joins only consecutive confident detections, and vanishes at a missing frame. Raise **Min score** to hide weak detections; lowering it cannot recover candidates already rejected by Python. Normal session export/import retains these observations and their FPS. Nothing converts these image positions to 3D.
+
+## Diagnosis and budgeted replay (2026-11-01)
+
+The previous `.93` score threshold allowed only 3 nearby candidates above threshold in a replay guided by saved detections. Of 106 saved post-seed locations, 51 had nearby components surviving the appearance/motion gates; 45 lacked a nearby HSV/contrast component, 8 failed Lab, 1 failed motion, and 1 failed size. Many blurred ball patches exceeded the locked saturation limit. These are comparisons to model positions, not ground-truth labels. Diagnostic frames and filter counts are cached locally under `output/diagnostic-frames.npz` and `output/filter-diagnosis.json`.
+
+Current defaults use score `.75`, margin `.08`, and a 48-pixel initial search radius. After two misses the bounded search centers on the last observation rather than indefinitely extrapolating velocity. Searches after prolonged loss produce review candidates only; allowing them to reset tracking introduced drift exceeding 100 pixels in an intermediate cached replay and was rejected.
+
+Heavy attempts are spaced by at least `ceil(segmentFrames / maxHeavyCalls)` when a finite budget is configured. On this rally that is 8 frames, preventing repeated successful recoveries from consuming all calls in the first second. Unlimited mode retains the previous cadence/backoff behavior.
+
+A real 2.0–8.28-second run completed in **13.24 seconds** including detector initialization, decoding, and tracking. It used **20 heavy calls** (19 crops, 1 full frame), distributed through 8.16 seconds, and accepted **34 detections**, including **19 cheap detections**. Of 106 saved baseline detections, 29 were recovered within 1.72 pixels and 77 were missed; 5 additional detections remain unverified. The previous budgeted run took 12.05 seconds, accepted 18 detections with no cheap detections, and exhausted its calls at 2.96 seconds. Runtime is below the 20-second target on this clip; detection coverage remains inadequate. Results: `output/debug-live-trial.json`. No claim of ground-truth accuracy or performance on longer videos is established.
 
 ## ONNX investigation
 

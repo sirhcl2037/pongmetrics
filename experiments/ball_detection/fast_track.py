@@ -1,6 +1,7 @@
 """Experimental color/motion tracker. Predictions are never exported as detections."""
 import argparse
 import json
+import math
 import time
 from pathlib import Path
 
@@ -72,11 +73,12 @@ def main():
     p.add_argument('--seed', nargs=3, type=float, required=True, metavar=('SECONDS', 'X', 'Y'), help='Clear ball seed; x/y normalized to image')
     p.add_argument('--end', type=float, default=8.28)
     p.add_argument('--heavy', action='store_true', help='Use real TrackNet recovery and periodic verification')
+    p.add_argument('--full-frame-heavy', action='store_true', help='Disable the default 256x144 heavy crop for reference runs')
     p.add_argument('--cached-heavy-json', type=Path, help='Replay saved TrackNet detections as a fast evaluation oracle')
     p.add_argument('--verify-every', type=int, default=5, help='Heavy verification interval while tracking; recovery uses backoff. Use 1 with --max-heavy-calls 0 for every post-seed frame.')
     p.add_argument('--max-heavy-calls', type=int, default=20, help='Heavy lookup/inference budget for this run; 0 is unlimited. Budget and recovery backoff can leave detections unverified.')
-    p.add_argument('--min-color-score', type=float, default=.93, help='Minimum heuristic score for a color-only candidate')
-    p.add_argument('--ambiguity-margin', type=float, default=.18, help='Required score gap over the runner-up')
+    p.add_argument('--min-color-score', type=float, default=.75, help='Minimum heuristic score for a color-only candidate; not a probability')
+    p.add_argument('--ambiguity-margin', type=float, default=.08, help='Required score gap over the runner-up')
     p.add_argument('--output', type=Path, default=Path(__file__).parent/'output'/'fast-track.json')
     a = p.parse_args()
     start, x, y = a.seed
@@ -100,6 +102,9 @@ def main():
     fps = cap.get(cv2.CAP_PROP_FPS)
     if not 0 < fps <= 240:
         raise RuntimeError('Unsupported FPS')
+    # A call cap alone can be spent in the first second. Space attempts over
+    # the requested interval, including successful recovery attempts.
+    heavy_spacing = max(1, math.ceil((a.end-start)*fps/a.max_heavy_calls)) if a.max_heavy_calls else 1
     size = (640, 360)
     position = np.array([x*size[0], y*size[1]], dtype=float)
     velocity = np.zeros(2)
@@ -130,21 +135,32 @@ def main():
         if appearance is None:
             appearance = classify_ball(hsv, lab, position)
         predicted = position + velocity
-        radius = min(140, 24 + misses*12 + int(np.linalg.norm(velocity)*.5))
-        candidates = select_candidates(hsv, lab, gray, previous, predicted, radius, appearance) if previous is not None and misses <= 5 else []
+        radius = min(140, 48 + misses*12 + int(np.linalg.norm(velocity)*.5))
+        # Keep looking after loss, in a bounded region around actual evidence.
+        # Extrapolation across an unseen hit must not move the search away forever.
+        search_center = predicted if misses < 2 else last_observed
+        candidates = select_candidates(hsv, lab, gray, previous, search_center, radius, appearance) if previous is not None else []
         # A close runner-up means appearance is ambiguous: retain a prediction.
         detected = bool(candidates) and candidates[0][0] > a.min_color_score and (len(candidates) == 1 or candidates[0][0]-candidates[1][0] > a.ambiguity_margin)
         visual_candidate = candidates[0] if detected else None
+        # Wide searches after loss are proposals, not trusted reacquisition.
+        # Otherwise a plausible white distractor can restart a false trajectory.
+        if misses > 5:
+            detected = False
         frame_index = len(records)
         budget_available = detector is not None and (a.max_heavy_calls == 0 or detector.calls < a.max_heavy_calls)
         heavy_checked = budget_available and previous is not None and frame_index >= next_heavy_frame and (not detected or frame_index-last_heavy_frame >= a.verify_every)
-        heavy_result = detector.detect(timestamp) if heavy_checked else None
+        # Cheap-filter failure alone does not establish that the large crop is
+        # wrong. Expand only after repeated heavy failures, and center on evidence.
+        heavy_center = None if a.full_frame_heavy or heavy_failures >= 2 else np.clip(last_observed / size, 0, 1)
+        heavy_result = detector.detect(timestamp, center=heavy_center) if heavy_checked else None
         if heavy_checked:
             last_heavy_frame = frame_index
             heavy_failures = 0 if heavy_result is not None else heavy_failures+1
             # Repeated detector gaps are likely occlusion; avoid paying for
             # every adjacent frame while still attempting later reacquisition.
-            next_heavy_frame = frame_index + (1 if a.verify_every == 1 else min(16, 2**min(heavy_failures, 4)))
+            retry_spacing = 1 if a.verify_every == 1 else min(16, 2**min(heavy_failures, 4))
+            next_heavy_frame = frame_index + max(heavy_spacing, retry_spacing)
             detected = heavy_result is not None
             if detected:
                 candidates = [(heavy_result[1], heavy_result[0]*size)]
@@ -171,7 +187,7 @@ def main():
             kind, confidence = ('predicted' if misses <= 5 else 'lost'), float(np.exp(-misses/2))
         record = {'timestamp': timestamp, 'position': {'x': float(position[0]/640), 'y': float(position[1]/360)}, 'kind': kind, 'method': 'heavy' if heavy_checked else 'color-motion', 'confidence': confidence, 'uncertaintyRadiusPixels': radius, 'needsDetector': misses > 5}
         record['reviewRequired'] = kind == 'detected' and not heavy_checked
-        if heavy_checked and heavy_result is None and visual_candidate is not None:
+        if visual_candidate is not None and not detected:
             score, point = visual_candidate
             record['recoveryCandidate'] = {'position':{'x':float(point[0]/640),'y':float(point[1]/360)},'score':score,'reviewRequired':True}
         records.append(record)
@@ -181,7 +197,10 @@ def main():
     total = time.perf_counter()-began
     summary = {'frames': len(records), 'detected': sum(r['kind']=='detected' for r in records), 'predicted': sum(r['kind']=='predicted' for r in records), 'lost': sum(r['kind']=='lost' for r in records), 'trackingSeconds': elapsed, 'trackingFps': len(records)/elapsed if elapsed else 0, 'decodeAndTrackingSeconds': total}
     summary['heavyCalls'] = detector.calls if detector else 0
+    summary['heavyCropCalls'] = getattr(detector, 'crop_calls', 0)
+    summary['heavyFullFrameCalls'] = getattr(detector, 'full_frame_calls', 0)
     summary['maxHeavyCalls'] = a.max_heavy_calls
+    summary['heavyMinimumSpacingFrames'] = heavy_spacing
     summary['heavyBudgetExhausted'] = bool(detector is not None and a.max_heavy_calls and detector.calls >= a.max_heavy_calls)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps({'format':'pongmetrics-fast-track-experiment', 'version':1, 'fps':fps, 'workingSize':size, 'ballAppearance':appearance, 'summary':summary, 'frames':records}, indent=2), encoding='utf8')

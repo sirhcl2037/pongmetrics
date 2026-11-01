@@ -13,7 +13,8 @@ class CachedHeavyDetector:
         self.points={round(o['timestamp']*self.fps):(np.array([o['position']['value']['x'],o['position']['value']['y']]),o['position'].get('confidence',1)) for o in data['ballObservations']}
         self.calls=0
 
-    def detect(self,timestamp):
+    def detect(self,timestamp, center=None):
+        # Saved full-frame detections cannot simulate inference on a crop.
         self.calls+=1
         value=self.points.get(round(timestamp*self.fps))
         return (value[0],value[1]) if value else None
@@ -45,19 +46,36 @@ class HeavyDetector:
         self.model = TrackNet(in_dim=15,out_dim=4,last_only=True).eval()
         self.model.load_state_dict({k.removeprefix('module.'):v for k,v in state.items()})
         self.calls = 0
+        self.crop_calls = 0
+        self.full_frame_calls = 0
 
-    def detect(self,timestamp):
+    def detect(self,timestamp, center=None):
         import torch
 
         i = round(timestamp*self.fps)
         if not 0 <= i < len(self.frames):
             return None
         sequence = [self.background,*[self.frames[max(0,j)] for j in range(i-3,i+1)]]
-        tensor = torch.from_numpy(np.stack(sequence).transpose(0,3,1,2).reshape(1,15,288,512))
+        left, top, width, height = 0, 0, 512, 288
+        if center is not None:
+            width, height = 256, 144
+            cx, cy = np.asarray(center)*[512,288]
+            left = int(np.clip(round(cx-width/2), 0, 512-width))
+            top = int(np.clip(round(cy-height/2), 0, 288-height))
+            self.crop_calls += 1
+        else:
+            self.full_frame_calls += 1
+        # A shared crop preserves temporal alignment and the original ball scale.
+        sequence = [frame[top:top+height,left:left+width] for frame in sequence]
+        tensor = torch.from_numpy(np.stack(sequence).transpose(0,3,1,2).reshape(1,15,height,width))
         with torch.inference_mode():
             heatmap = self.model(frames=tensor)[0][0,0].numpy()
         self.calls += 1
         count, _, _, centers = cv2.connectedComponentsWithStats((heatmap>=.5).astype(np.uint8))
         if count != 2:
             return None
-        return centers[1]/[512,288], float(heatmap.max())
+        # Components clipped by a crop boundary are unreliable; let recovery retry.
+        point = centers[1]
+        if center is not None and (point[0] < 4 or point[1] < 4 or point[0] >= width-4 or point[1] >= height-4):
+            return None
+        return (point+[left,top])/[512,288], float(heatmap.max())
