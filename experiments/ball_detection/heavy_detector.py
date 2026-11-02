@@ -1,5 +1,6 @@
 """TrackNet recovery using the same preprocessing as detect.py."""
 import json
+import time
 import cv2
 import numpy as np
 
@@ -21,7 +22,8 @@ class CachedHeavyDetector:
 
 
 class HeavyDetector:
-    def __init__(self, video, end):
+    def __init__(self, video, end, background_samples=24):
+        began = time.perf_counter()
         import torch
         from detect import TrackNet, ROOT
 
@@ -37,8 +39,11 @@ class HeavyDetector:
         cap.release()
         if not frames:
             raise ValueError('No frames for recovery detector')
-        self.background = np.median(np.stack(frames),axis=0).astype(np.float32)/255
-        self.frames = np.asarray(frames,dtype=np.float32)/255
+        self.frames = np.asarray(frames,dtype=np.uint8)
+        del frames
+        indices = np.linspace(0,len(self.frames)-1,min(background_samples,len(self.frames)),dtype=int) if background_samples else np.arange(len(self.frames))
+        self.background = np.median(self.frames[indices],axis=0).astype(np.float32)/255
+        self.background_sample_count = len(indices)
         from mmengine.logging.history_buffer import HistoryBuffer
         with torch.serialization.safe_globals([HistoryBuffer,np.ndarray,np.dtype,(np._core.multiarray.scalar,'numpy.core.multiarray.scalar'),(np._core.multiarray._reconstruct,'numpy.core.multiarray._reconstruct'),type(np.dtype('float64')),type(np.dtype('int64')),getattr]):
             state = torch.load(ROOT/'balltrack_best.pth',map_location='cpu',weights_only=True)
@@ -48,6 +53,7 @@ class HeavyDetector:
         self.calls = 0
         self.crop_calls = 0
         self.full_frame_calls = 0
+        self.startup_seconds = time.perf_counter()-began
 
     def detect(self,timestamp, center=None):
         import torch
@@ -55,7 +61,6 @@ class HeavyDetector:
         i = round(timestamp*self.fps)
         if not 0 <= i < len(self.frames):
             return None
-        sequence = [self.background,*[self.frames[max(0,j)] for j in range(i-3,i+1)]]
         left, top, width, height = 0, 0, 512, 288
         if center is not None:
             width, height = 256, 144
@@ -66,7 +71,8 @@ class HeavyDetector:
         else:
             self.full_frame_calls += 1
         # A shared crop preserves temporal alignment and the original ball scale.
-        sequence = [frame[top:top+height,left:left+width] for frame in sequence]
+        region = np.s_[top:top+height,left:left+width]
+        sequence = [self.background[region],*[self.frames[max(0,j)][region].astype(np.float32)/255 for j in range(i-3,i+1)]]
         tensor = torch.from_numpy(np.stack(sequence).transpose(0,3,1,2).reshape(1,15,height,width))
         with torch.inference_mode():
             heatmap = self.model(frames=tensor)[0][0,0].numpy()
