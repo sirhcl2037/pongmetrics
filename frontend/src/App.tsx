@@ -46,9 +46,10 @@ function App() {
   }
 
   function addShot(wing: Wing) {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video || video.readyState < 1 || video.error) return;
 
-    const time = videoRef.current.currentTime;
+    const time = video.currentTime;
 
     const shot: Shot = {
       id: nextId.current++,
@@ -86,7 +87,12 @@ function App() {
 
   const usage = shots.length ? forehands / shots.length * 100 : 0;
   const visibleShots = shots.filter(shot => filter === "All" || shot.wing === filter);
-  const timestamp = (time: number) => `${Math.floor(time / 60).toString().padStart(2, "0")}:${(time % 60).toFixed(2).padStart(5, "0")}`;
+  const timestamp = (time: number) => {
+    const hundredths = Math.round(time * 100);
+    const minutes = Math.floor(hundredths / 6000);
+    const seconds = (hundredths % 6000) / 100;
+    return `${String(minutes).padStart(2, '0')}:${seconds.toFixed(2).padStart(5, '0')}`;
+  };
 
   return (
     <div className="app-shell">
@@ -97,7 +103,7 @@ function App() {
       </header>
       <main>
         <div className="page-heading">
-          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Table Tennis Match Review</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
+          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Professional Grade Deep Analysis</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
           <button className="upload-button" onClick={() => fileRef.current?.click()}><span aria-hidden="true">↑</span> {videoUrl ? 'Change video' : 'Upload match'}</button>
           <input ref={fileRef} className="visually-hidden" type="file" accept="video/*" onChange={uploadVideo} aria-label="Upload match video" />
         </div>

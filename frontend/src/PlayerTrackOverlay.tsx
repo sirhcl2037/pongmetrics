@@ -7,7 +7,7 @@ export function PlayerTrackOverlay({ videoRef, tracks }: { videoRef: RefObject<H
   const people = tracks.frames.get(Math.round(time * tracks.fps)) ?? [];
   return <g className="player-track-overlay" aria-label="Player tracking overlay">
     {people.map(({ trackId, playerId, box }) => {
-      const label = playerId === 'near-player' ? 'Near player' : playerId === 'far-player' ? 'Far player' : `Track ${trackId}`;
+      const label = playerId === 'near-player' ? 'Player 1' : playerId === 'far-player' ? 'Player 2' : `Track ${trackId}`;
       const color = playerId === 'near-player' ? '#75f587' : playerId === 'far-player' ? '#60ddff' : '#ffe875';
       return <g key={trackId}>
         <rect x={box.x} y={box.y} width={box.width} height={box.height} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />

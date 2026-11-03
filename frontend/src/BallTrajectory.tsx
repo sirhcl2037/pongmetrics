@@ -1,22 +1,10 @@
-import { useEffect, useState, type RefObject } from 'react';
+import type { RefObject } from 'react';
 import type { BallObservation } from './session';
 import { ballTrail } from './ballDetections';
+import { useVideoFrameTime } from './useVideoFrameTime';
 
 export function BallTrajectory({ videoRef, observations, fps, threshold }: { videoRef:RefObject<HTMLVideoElement|null>; observations:BallObservation[]; fps:number; threshold:number }) {
-  const [time,setTime] = useState(0);
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    let id = 0;
-    const update = () => setTime(video.currentTime);
-    const frame = (_:number, metadata:VideoFrameCallbackMetadata) => {
-      setTime(metadata.mediaTime);
-      id = video.requestVideoFrameCallback(frame);
-    };
-    id = video.requestVideoFrameCallback(frame);
-    video.addEventListener('seeked',update);
-    return () => { video.cancelVideoFrameCallback(id); video.removeEventListener('seeked',update); };
-  },[videoRef]);
+  const time = useVideoFrameTime(videoRef);
   const trail = ballTrail(observations,time,fps,threshold);
   const current = trail.at(-1);
   return <g className="ball-trajectory" aria-label={current ? 'Ball detected' : 'No confident ball detection'}>

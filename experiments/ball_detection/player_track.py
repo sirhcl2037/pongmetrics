@@ -147,6 +147,8 @@ def main():
     finally:
         cap.release()
         if writer is not None: writer.release()
+    if not rows:
+        raise RuntimeError('No video frames were decoded in the requested interval')
     counts = {name:sum(any(p['playerId']==name for p in r['people']) for r in rows) for name in ['near-player','far-player']}
     summary = {'frames':len(rows),'framesWithBothPlayers':sum(not r['needsReview'] for r in rows),
                'sourceFrames':segment_frames,'stride':a.stride,
