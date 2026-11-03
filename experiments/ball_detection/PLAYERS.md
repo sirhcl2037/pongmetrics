@@ -1,6 +1,6 @@
 # Player tracking
 
-Offline YOLO11n person detector + ByteTrack, with one detector call per frame. `PersonTracker` in `player_track.py` is reusable in another Python pipeline; settings and weights can be swapped independently. This is an experimental Python output, not yet a player overlay/import feature in the browser and not yet connected to ball-crop selection.
+Offline YOLO11n person detector + ByteTrack. `PersonTracker` in `player_track.py` is reusable in another Python pipeline. Settings and weights can be swapped independently. The browser can display saved tracks for the matching source video.
 
 ## Setup
 
@@ -22,6 +22,10 @@ experiments/ball_detection/.venv/Scripts/python.exe experiments/ball_detection/p
 
 Outputs: `output/players.json` (every processed frame), `output/players.jpg` (sampled contact sheet), and the optional silent review video. JSON includes video metadata, weight SHA-256, package version, detector/tracker settings, and timings. `CachedPlayerTracks(path, video=source_path).at(timestamp)` reuses saved tracks without loading the detector; absent frames return `None`. Reuse these observations for ball-tracking experiments instead of repeating neural detection.
 
+The local Vite app (`npm run dev` or `npm run preview` in `frontend`) generates player tracks automatically after a video loads. It uses the Python environment and weights from the setup above. The app accepts one analysis job at a time for videos up to 1 GB. It processes the full upload on this computer and displays the resulting boxes when analysis finishes. Longer clips can take significantly longer than the short rally benchmark. For fixed-camera tracking, upload a continuous shot.
+
+**Import player tracks** also accepts an existing `output/players.json` for the matching source video. **Jump to player tracks** seeks to the start of the tracked segment.
+
 The playing-area filter checks box centers within normalized `--roi LEFT TOP RIGHT BOTTOM` (default `.15 .05 .85 .95`). Tune it for another camera angle to exclude officials and spectators. It filters output eligibility; the detector still sees the full frame. When exactly two eligible people first appear, the upper one is labeled `far-player` and the lower one `near-player`. These initial labels stay attached to their track IDs; they are not verified player names. New IDs are unassigned and flagged for review rather than silently inheriting identity. `missingPlayers` and `needsReview` expose gaps and ambiguity. No positions are interpolated or carried through missing frames.
 
 Coordinates are normalized to the original video. `box` gives x/y/width/height; `center` is the box center. `groundProxy` is the box bottom center, **not measured feet or a metric court position**. Arms/rackets can extend outside the box. Person boxes should inform ball tracking, not exclude ball detections inside them.
@@ -30,6 +34,7 @@ Coordinates are normalized to the original video. `box` gives x/y/width/height; 
 
 - `--weights`: another local YOLO detection checkpoint; default `yolo11n.pt`.
 - `--imgsz`: maximum inference dimension, rounded internally for aspect ratio; default 416, must be a multiple of 32. Try 512 if distant players are missed.
+- `--stride`: detect every Nth source frame. The default of 1 gives continuous overlay coverage. Skipped frames have no boxes. The optional review video runs at the sampled frame rate.
 - `--confidence`: default `.1`, keeping lower-score detections for ByteTrack association; model scores are uncalibrated.
 - `--tracker`: default `players-bytetrack.yaml`; edit the separate file or provide another built-in/custom YAML.
 - `--roi`, `--start`, `--end`, `--output`: video segment and output controls. A tracker instance is for one continuous shot; split camera cuts and side changes explicitly.
@@ -44,3 +49,5 @@ Wang Chuqin vs Sora Matsushima, 2.0–8.28 seconds, 157 frames at 25 FPS:
 - Player-only processing: **10.65 seconds total**, including 1.97 seconds initialization and optional review encoding; 7.20 seconds detection/tracking (about 46 ms/frame).
 - Sampled overlays visually inspected: boxes follow both players, with officials excluded. All-frame checks confirmed normalized bounds, presence of both IDs, and consistent near/far order.
 - This is continuity/qualitative validation, not labeled box accuracy, cross-cut re-identification, or combined player+ball runtime. Every-frame heavy ball detection plus this detector has not been benchmarked together; the combined 20-second goal remains unproven.
+
+A later stride comparison on the same rally kept both IDs on all processed frames. Detection and tracking took 9.84s at stride 1 (157 frames), 5.08s at stride 2 (79 frames), and 4.65s at stride 3 (53 frames). On shared frames, maximum center displacement relative to the full-rate run was 6.6 pixels at stride 2 and 10.0 pixels at stride 3 in a 640×360 image. These figures exclude startup, which varied between runs.

@@ -80,6 +80,7 @@ def main():
     p.add_argument('video', type=Path)
     p.add_argument('--weights', type=Path, default=ROOT/'output'/'models'/'yolo11n.pt')
     p.add_argument('--imgsz', type=int, default=416)
+    p.add_argument('--stride', type=int, default=1, help='Detect on every Nth source frame, starting with the first frame in the segment')
     p.add_argument('--confidence', type=float, default=.1, help='Low threshold retains ByteTrack rescue detections')
     p.add_argument('--tracker', default=str(ROOT/'players-bytetrack.yaml'), help='Built-in name or custom tracker YAML')
     p.add_argument('--roi', nargs=4, type=float, default=(.15,.05,.85,.95), metavar=('LEFT','TOP','RIGHT','BOTTOM'), help='Normalized box-center eligibility region; tune to exclude officials/spectators')
@@ -87,7 +88,10 @@ def main():
     p.add_argument('--end', type=float, default=8.28)
     p.add_argument('--output', type=Path, default=ROOT/'output'/'players.json')
     p.add_argument('--review-video', type=Path, help='Optional annotated MP4; never repeats inference')
+    p.add_argument('--no-review-sheet', action='store_true', help='Skip the sampled contact sheet')
     a = p.parse_args()
+    if a.stride < 1:
+        p.error('--stride must be at least 1')
     if not 0 <= a.start < a.end or a.imgsz < 64 or a.imgsz%32 or not 0 < a.confidence <= 1:
         p.error('Invalid time interval, image size (multiple of 32), or confidence')
     if not (0 <= a.roi[0] < a.roi[2] <= 1 and 0 <= a.roi[1] < a.roi[3] <= 1):
@@ -106,6 +110,7 @@ def main():
     video = {'name':a.video.name,'size':a.video.stat().st_size,'width':int(cap.get(3)),
              'height':int(cap.get(4)),'duration':cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps}
     rows, tiles, writer = [], [], None
+    segment_frames = 0
     processing = 0.
     try:
         while True:
@@ -114,12 +119,17 @@ def main():
             timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)/1000
             if timestamp < a.start: continue
             if timestamp >= a.end: break
+            sample = segment_frames % a.stride == 0
+            segment_frames += 1
+            if not sample:
+                continue
             tick = time.perf_counter()
             row = tracker.update(frame)
             processing += time.perf_counter()-tick
             row['timestamp'] = timestamp
             rows.append(row)
-            if a.review_video or (len(rows)-1)%25 == 0:
+            make_tile = not a.no_review_sheet and (len(rows)-1)%25 == 0
+            if a.review_video or make_tile:
                 preview = cv2.resize(frame,(960,540))
                 for person in row['people']:
                     box = person['box']; color = (0,220,0) if person['playerId']=='near-player' else (255,200,0)
@@ -127,11 +137,11 @@ def main():
                     cv2.rectangle(preview,(x,y),(x+w,y+h),color,2)
                     cv2.putText(preview,f"{person['playerId'] or 'unassigned'} #{person['trackId']}",(x,max(20,y-7)),cv2.FONT_HERSHEY_SIMPLEX,.5,color,1)
                 cv2.putText(preview,f'{timestamp:.2f}s',(10,25),cv2.FONT_HERSHEY_SIMPLEX,.7,(0,255,255),2)
-                if (len(rows)-1)%25 == 0: tiles.append(preview)
+                if make_tile: tiles.append(preview)
                 if a.review_video:
                     if writer is None:
                         a.review_video.parent.mkdir(parents=True,exist_ok=True)
-                        writer = cv2.VideoWriter(str(a.review_video),cv2.VideoWriter_fourcc(*'mp4v'),fps,(960,540))
+                        writer = cv2.VideoWriter(str(a.review_video),cv2.VideoWriter_fourcc(*'mp4v'),fps/a.stride,(960,540))
                         if not writer.isOpened(): raise RuntimeError('Cannot create review video')
                     writer.write(preview)
     finally:
@@ -139,12 +149,13 @@ def main():
         if writer is not None: writer.release()
     counts = {name:sum(any(p['playerId']==name for p in r['people']) for r in rows) for name in ['near-player','far-player']}
     summary = {'frames':len(rows),'framesWithBothPlayers':sum(not r['needsReview'] for r in rows),
+               'sourceFrames':segment_frames,'stride':a.stride,
                'observedFramesByPlayer':counts,'trackIds':sorted({p['trackId'] for r in rows for p in r['people']}),
                'startupSeconds':startup,'detectionAndTrackingSeconds':processing,'totalSeconds':time.perf_counter()-began}
     import ultralytics
     payload = {'format':'pongmetrics-player-tracks','version':1,'coordinateSystem':'normalized-video-image',
         'video':video,'fps':fps,'model':{'name':a.weights.name,'sha256':hashlib.sha256(a.weights.read_bytes()).hexdigest(),
-        'ultralyticsVersion':ultralytics.__version__,'tracker':a.tracker,'imgsz':a.imgsz,'confidence':a.confidence,'roi':a.roi},
+        'ultralyticsVersion':ultralytics.__version__,'tracker':a.tracker,'imgsz':a.imgsz,'confidence':a.confidence,'roi':a.roi,'stride':a.stride},
         'identityMeaning':'Initial near/far positions within this shot; not verified names or cross-cut identity',
         'summary':summary,'frames':rows}
     a.output.parent.mkdir(parents=True,exist_ok=True)

@@ -3,11 +3,14 @@ import { homography, imageRect, normalizePoint, TABLE, transform, validateCorner
 import { parseSession, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
 import { parseDetections } from './ballDetections';
+import { PlayerTrackOverlay } from './PlayerTrackOverlay';
+import { parsePlayerTracks, type PlayerTracks } from './playerTracks';
 
 const labels = ['1 · Near-left (origin)', '2 · Near-right (width)', '3 · Far-right', '4 · Far-left'];
-type Props = { url: string; name: string; size: number; videoRef: RefObject<HTMLVideoElement | null>; shots: Shot[]; onShots: (shots: Shot[]) => void; onTime: (time: number) => void; players: Player[]; selectedPlayerId: string; onPlayers: (players: Player[]) => void; onSelectPlayer: (id: string) => void; locatingPlayerId: string | null; onLocate: (id: string | null) => void };
+type Props = { url: string; file: File; videoRef: RefObject<HTMLVideoElement | null>; shots: Shot[]; onShots: (shots: Shot[]) => void; onTime: (time: number) => void; players: Player[]; selectedPlayerId: string; onPlayers: (players: Player[]) => void; onSelectPlayer: (id: string) => void; locatingPlayerId: string | null; onLocate: (id: string | null) => void };
 
-export function VideoWorkspace({ url, name, size, videoRef, shots, onShots, onTime, players, selectedPlayerId, onPlayers, onSelectPlayer, locatingPlayerId, onLocate }: Props) {
+export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, players, selectedPlayerId, onPlayers, onSelectPlayer, locatingPlayerId, onLocate }: Props) {
+  const { name, size } = file;
   const [fps, setFps] = useState(25);
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
   const [calibration, setCalibration] = useState<Session['calibration']>(null);
@@ -20,6 +23,46 @@ export function VideoWorkspace({ url, name, size, videoRef, shots, onShots, onTi
   const [rect, setRect] = useState({ x: 0, y: 0, width: 1, height: 1 });
   const importRef = useRef<HTMLInputElement>(null);
   const detectionRef = useRef<HTMLInputElement>(null);
+  const playerTrackRef = useRef<HTMLInputElement>(null);
+  const [playerTracks, setPlayerTracks] = useState<PlayerTracks | null>(null);
+  const [showPlayerTracks, setShowPlayerTracks] = useState(true);
+  const [trackingStatus, setTrackingStatus] = useState('');
+  const [trackingFailed, setTrackingFailed] = useState(false);
+  const [trackingAttempt, setTrackingAttempt] = useState(0);
+  const localTracking = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  useEffect(() => {
+    if (!metadata || !localTracking) return;
+    const controller = new AbortController();
+    async function generateTracks(video: Session['video']) {
+      setTrackingStatus('Tracking players… You can annotate while this runs.');
+      setTrackingFailed(false);
+      try {
+        const response = await fetch('/api/player-tracks', {
+          method: 'POST', headers: { 'Content-Type': 'application/octet-stream' },
+          body: file, signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          if (controller.signal.aborted) return;
+          setTrackingStatus(data.error || 'Player tracking failed.');
+          setTrackingFailed(true);
+          return;
+        }
+        // The local worker uses a temporary filename for this exact upload.
+        data.video.name = file.name;
+        const tracks = parsePlayerTracks(JSON.stringify(data), video);
+        if (controller.signal.aborted) return;
+        setPlayerTracks(tracks);
+        setTrackingStatus(`Player tracks ready for ${tracks.frames.size} frames.`);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setTrackingStatus(error instanceof Error ? error.message : 'Player tracking failed.');
+        setTrackingFailed(true);
+      }
+    }
+    void generateTracks(metadata);
+    return () => controller.abort();
+  }, [file, metadata, localTracking, trackingAttempt]);
   const [ballFps,setBallFps] = useState(25);
   const [threshold,setThreshold] = useState(.5);
   const [showBall,setShowBall] = useState(true);
@@ -52,7 +95,10 @@ export function VideoWorkspace({ url, name, size, videoRef, shots, onShots, onTi
       const session = parseSession(await file.text());
       if (!metadata || JSON.stringify(session.video) !== JSON.stringify(metadata)) {
         // Compare named fields, independent of JSON property order.
-        if (!metadata || (Object.keys(metadata) as (keyof typeof metadata)[]).some(key => session.video[key] !== metadata[key])) throw new Error('Load the matching video first (name, size, dimensions and duration must match).');
+        if (!metadata || (Object.keys(metadata) as (keyof typeof metadata)[]).some(key => session.video[key] !== metadata[key])) {
+          setMessage('Load the matching video first (name, size, dimensions and duration must match).');
+          return;
+        }
       }
       setFps(session.fps); setCalibration(session.calibration); onShots([...session.shots].sort((a,b) => a.time-b.time)); setBallObservations([...session.ballObservations].sort((a,b) => a.timestamp-b.timestamp));
       setDraft(null); setInspect(false); setSelected(null); setMessage('Session imported.');
@@ -106,6 +152,7 @@ export function VideoWorkspace({ url, name, size, videoRef, shots, onShots, onTi
           }
         }}>
           <svg x={rect.x} y={rect.y} width={rect.width} height={rect.height} viewBox="0 0 1 1" preserveAspectRatio="none">
+            {showPlayerTracks && playerTracks && <PlayerTrackOverlay videoRef={videoRef} tracks={playerTracks} />}
             {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} />}
             {players.map((p,i) => p.association && Math.abs(p.association.timestamp-time) < .5/fps && <g key={p.id}><ellipse cx={p.association.position.value.x} cy={p.association.position.value.y} rx=".012" ry=".018" /><text x={p.association.position.value.x+.015} y={p.association.position.value.y} fontSize=".035">P{i+1}: {p.name}</text></g>)}
             {corners.length > 1 && <polyline points={corners.map(p => `${p.x},${p.y}`).join(' ')+(corners.length === 4 ? ` ${corners[0].x},${corners[0].y}` : '')} />}
@@ -122,6 +169,27 @@ export function VideoWorkspace({ url, name, size, videoRef, shots, onShots, onTi
         try { const data=parseDetections(await file.text(),metadata); setBallObservations(data.observations); setBallFps(data.fps); setMessage(`Imported ${data.observations.length} raw detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
       }} />
       <p>{ballObservations.length} ball observations. Overlay follows decoded video frames; no interpolation across missing frames. Export JSON also saves these observations.</p>
+      <div className="workspace-tools">
+        <button disabled={!metadata} onClick={() => playerTrackRef.current?.click()}>Import player tracks</button>
+        <label><input type="checkbox" checked={showPlayerTracks} onChange={e => setShowPlayerTracks(e.target.checked)} /> Player overlay</label>
+        {trackingFailed && <button onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Retry player tracking</button>}
+        {playerTracks && <button onClick={() => {
+          const video = videoRef.current;
+          if (video) { video.pause(); video.currentTime = playerTracks.firstTimestamp; }
+        }}>Jump to player tracks</button>}
+      </div>
+      {trackingStatus && <p role="status">{trackingStatus}</p>}
+      <input ref={playerTrackRef} className="visually-hidden" type="file" aria-label="Player tracks file" accept=".json,application/json" onChange={async e => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !metadata) return;
+        try {
+          const tracks = parsePlayerTracks(await file.text(), metadata);
+          setPlayerTracks(tracks);
+          setShowPlayerTracks(true);
+          setMessage(`Imported player tracks for ${tracks.frames.size} frames.`);
+        } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not import player tracks.'); }
+      }} />
       {locatingPlayerId && <div className="workspace-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
       <div className="workspace-tools"><button disabled={!metadata} onClick={() => seek(-1)}>← Previous frame</button><button disabled={!metadata} onClick={() => seek(1)}>Next frame →</button><label>FPS <input aria-label="Video FPS" type="number" min="1" max="240" value={fps} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 1 && n <= 240) setFps(n); }} /></label></div>
       <p>Frame steps use 1 / FPS seconds. Match FPS to your clip; variable-rate footage may not seek to exact frames.</p>

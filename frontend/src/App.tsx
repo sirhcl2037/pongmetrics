@@ -13,8 +13,8 @@ function App() {
   const nextId = useRef(0);
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoName, setVideoName] = useState("");
-  const [videoSize, setVideoSize] = useState(0);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const videoName = videoFile?.name ?? '';
   const [players, setPlayers] = useState<Player[]>(defaultPlayers);
   const [selectedPlayerId, setSelectedPlayerId] = useState('player-1');
   const [autoSwitchPlayers, setAutoSwitchPlayers] = useState(false);
@@ -36,8 +36,7 @@ function App() {
     if (!file) return;
 
     setVideoUrl(URL.createObjectURL(file));
-    setVideoName(file.name);
-    setVideoSize(file.size);
+    setVideoFile(file);
     setPlayers(defaultPlayers()); setSelectedPlayerId('player-1'); setLocatingPlayerId(null);
     setShots([]);
     setCurrentTime(0);
@@ -98,14 +97,14 @@ function App() {
       </header>
       <main>
         <div className="page-heading">
-          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Professional Grade Deep Analysisnpm audit fix</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
+          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Table Tennis Match Review</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
           <button className="upload-button" onClick={() => fileRef.current?.click()}><span aria-hidden="true">↑</span> {videoUrl ? 'Change video' : 'Upload match'}</button>
           <input ref={fileRef} className="visually-hidden" type="file" accept="video/*" onChange={uploadVideo} aria-label="Upload match video" />
         </div>
         <div className="workspace-grid">
           <section className="panel video-panel" aria-labelledby="video-heading">
             <div className="panel-heading"><div className="heading-with-dot"><i /><h2 id="video-heading">Match review</h2></div><span className="small-label">{videoUrl ? 'READY TO ANNOTATE' : 'START HERE'}</span></div>
-            {videoUrl ? <VideoWorkspace key={videoUrl} url={videoUrl} name={videoName} size={videoSize} videoRef={videoRef} shots={shots} players={players} selectedPlayerId={selectedPlayerId} onPlayers={setPlayers} onSelectPlayer={setSelectedPlayerId} locatingPlayerId={locatingPlayerId} onLocate={setLocatingPlayerId} onShots={imported => { setShots(imported); nextId.current = Math.max(-1, ...imported.map(s => s.id)) + 1; }} onTime={setCurrentTime} /> :
+            {videoUrl && videoFile ? <VideoWorkspace key={videoUrl} url={videoUrl} file={videoFile} videoRef={videoRef} shots={shots} players={players} selectedPlayerId={selectedPlayerId} onPlayers={setPlayers} onSelectPlayer={setSelectedPlayerId} locatingPlayerId={locatingPlayerId} onLocate={setLocatingPlayerId} onShots={imported => { setShots(imported); nextId.current = Math.max(-1, ...imported.map(s => s.id)) + 1; }} onTime={setCurrentTime} /> :
               <button className="upload-stage" onClick={() => fileRef.current?.click()}>
                 <span className="table-illustration" aria-hidden="true"><span className="table-net" /><span className="table-ball" /></span>
                 <span className="upload-title">Bring your game into focus</span>
