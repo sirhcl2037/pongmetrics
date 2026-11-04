@@ -14,7 +14,8 @@ const maxBytes = 1024 ** 3;
 export function localPlayerTracking(): Plugin {
   let busy = false;
   async function handle(req: IncomingMessage, res: ServerResponse, next: () => void) {
-    if (req.url !== '/api/player-tracks') return next();
+    if (req.url !== '/api/player-tracks' && req.url !== '/api/ball-tracks') return next();
+    const ball = req.url === '/api/ball-tracks';
     const send = (status: number, body: object) => {
       if (res.destroyed) return;
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -48,9 +49,12 @@ export function localPlayerTracking(): Plugin {
         ? join(experiment, '.venv', 'Scripts', 'python.exe')
         : join(experiment, '.venv', 'bin', 'python'));
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(python, [join(experiment, 'player_track.py'), video, '--start', '0',
-          '--end', 'inf', '--no-review-sheet', '--output', output],
-          { cwd: experiment, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'], signal: abort.signal });
+        const args = ball
+          ? [join(experiment, 'temporal_track.py'), '--video', video, '--output', output]
+          : [join(experiment, 'player_track.py'), video, '--start', '0', '--end', 'inf', '--no-review-sheet', '--output', output];
+        const child = spawn(python, args,
+          { cwd: experiment, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'], signal: abort.signal,
+            env: { ...process.env, OPENBLAS_NUM_THREADS: '1', OMP_NUM_THREADS: '4', MKL_NUM_THREADS: '4' } });
         let error = '';
         let spawnError: Error | undefined;
         child.stderr.on('data', chunk => { error = (error + String(chunk)).slice(-2000); });
@@ -58,14 +62,14 @@ export function localPlayerTracking(): Plugin {
         child.on('close', code => {
           if (spawnError) reject(spawnError);
           else if (code === 0) resolve();
-          else reject(new Error(error.trim() || 'Player tracking failed.'));
+          else reject(new Error(error.trim() || 'Tracking failed.'));
         });
       });
       send(200, JSON.parse(await readFile(output, 'utf8')));
     } catch (error) {
       if (!abort.signal.aborted) {
-        console.error('Player tracking:', error);
-        send(500, { error: 'Could not generate player tracks. Check the local Python setup and video format.' });
+        console.error(ball ? 'Ball tracking:' : 'Player tracking:', error);
+        send(500, { error: `Could not generate ${ball ? 'ball' : 'player'} tracks. Check the local Python setup and video format.` });
       }
     } finally {
       res.off('close', cancel);

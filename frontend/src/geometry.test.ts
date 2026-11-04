@@ -2,9 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
 import { parseSession, defaultPlayers } from './session.ts';
-import { ballTrail, parseDetections } from './ballDetections.ts';
+import { ballTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
 const corners = [{x:.3,y:.2},{x:.7,y:.2},{x:.9,y:.8},{x:.1,y:.8}];
 const close = (a: number,b: number) => assert.ok(Math.abs(a-b)<1e-8, `${a} != ${b}`);
+
+test('tracking diagnostics never become observations and require ordered finite values', () => {
+  const trackingFrames = [{ timestamp: .04, prediction: { x: 1.2, y: -.1 }, uncertaintyRadiusPixels: 40, reason: 'occluded' }];
+  assert.deepEqual(parseTrackingFrames(JSON.stringify({trackingFrames})), trackingFrames);
+  assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:[...trackingFrames,...trackingFrames]})));
+  assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:[{...trackingFrames[0],uncertaintyRadiusPixels:-1}]})));
+  const observations = Array.from({length:10000}, (_,i) => ({timestamp:i/25, position:{value:{x:.5,y:.3},source:'automatic' as const,confidence:.3}}));
+  assert.equal(ballTrail(observations,399.96,25,.15).length,6);
+  assert.equal(ballTrail(observations,399.96,25,.5).length,0);
+});
 test('ball trail drops missing frames and uncertain detections without interpolation', () => {
   const observations = [0,.04,.12,.16].map(timestamp => ({timestamp,position:{value:{x:.5,y:.3},source:'automatic' as const,confidence:.9}}));
   assert.equal(ballTrail(observations,.08,25,.5).length,0);

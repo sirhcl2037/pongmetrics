@@ -12,7 +12,14 @@ export function parseDetections(text: string, video: Session['video']) {
 
 // A missing frame breaks the trail. Never bridge or interpolate across it.
 export function ballTrail(observations: BallObservation[], time: number, fps: number, threshold: number) {
-  const frame = observations.findIndex(o => Math.abs(o.timestamp-time) < .5/fps && (o.position.confidence ?? 1) >= threshold);
+  // Imports are sorted. Binary search keeps playback cheap on long recordings.
+  let lo = 0, hi = observations.length;
+  while (lo < hi) {
+    const mid = (lo+hi) >>> 1;
+    if (observations[mid].timestamp <= time-.5/fps) lo = mid+1;
+    else hi = mid;
+  }
+  const frame = lo < observations.length && Math.abs(observations[lo].timestamp-time) < .5/fps && (observations[lo].position.confidence ?? 1) >= threshold ? lo : -1;
   if (frame < 0) return [];
   const trail = [observations[frame]];
   for (let i = frame-1; i >= 0 && trail.length < 6; i--) {
@@ -20,4 +27,20 @@ export function ballTrail(observations: BallObservation[], time: number, fps: nu
     trail.unshift(observations[i]);
   }
   return trail;
+}
+
+export type TrackingFrame = { timestamp: number; prediction: { x: number; y: number } | null; uncertaintyRadiusPixels: number | null; reason: string };
+
+// Diagnostics are separate from BallObservation and never enter session exports.
+export function parseTrackingFrames(text: string): TrackingFrame[] {
+  const data = JSON.parse(text);
+  if (!Array.isArray(data.trackingFrames)) return [];
+  const frames: TrackingFrame[] = data.trackingFrames;
+  if (frames.some((r, i) => !Number.isFinite(r.timestamp) || r.timestamp < 0 || typeof r.reason !== 'string' ||
+      (i > 0 && r.timestamp <= frames[i-1].timestamp) ||
+      (r.prediction !== null && (!r.prediction || !Number.isFinite(r.prediction.x) || !Number.isFinite(r.prediction.y))) ||
+      (r.uncertaintyRadiusPixels !== null && (!Number.isFinite(r.uncertaintyRadiusPixels) || r.uncertaintyRadiusPixels < 0)))) {
+    throw new Error('Invalid tracking diagnostics.');
+  }
+  return frames;
 }

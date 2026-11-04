@@ -18,3 +18,5 @@ A web-based table tennis analytics platform designed to analyze match footage, i
 ## Status
 
 In development.
+
+Local video annotation and offline player/ball tracking are implemented. See [temporal ball tracking](experiments/ball_detection/TRACKING.md) and [player tracking](experiments/ball_detection/PLAYERS.md) for setup, measured results, and reproducible commands. Tracking generation runs locally through Vite; the deployed static app can import generated files.

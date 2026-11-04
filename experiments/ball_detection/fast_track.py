@@ -93,12 +93,30 @@ def select_candidates(hsv, lab, gray, previous, predicted, radius, appearance, c
     return sorted(candidates,key=lambda c:c[0],reverse=True)
 
 
+def near_player(tracks, point, observation_time, timestamp):
+    """Identify a possible contact region from recent ball and player evidence."""
+    if tracks is None or timestamp - observation_time > .4:
+        return False
+    row = tracks.at(observation_time)
+    if row is None:
+        return False
+    for person in row['people']:
+        box = person['box']
+        pad = .025
+        if (person['playerId'] is not None and
+                box['x']-pad <= point[0] <= box['x']+box['width']+pad and
+                box['y']-pad <= point[1] <= box['y']+box['height']+pad):
+            return True
+    return False
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('video', type=Path)
     p.add_argument('--seed', nargs=3, type=float, required=True, metavar=('SECONDS', 'X', 'Y'), help='Clear ball seed; x/y normalized to image')
     p.add_argument('--end', type=float, default=8.28)
     p.add_argument('--heavy', action='store_true', help='Use real TrackNet recovery and periodic verification')
+    p.add_argument('--player-tracks', type=Path, help='Use saved player tracks to handle uncertainty near possible contact')
     p.add_argument('--background-color', action='store_true', help='Experimental background preprocessing and heavy-calibrated white-mixture matching')
     p.add_argument('--heavy-background-samples', type=int, default=24, help='Frames sampled for heavy median background; 0 restores all-frame median')
     p.add_argument('--contrast-components', action='store_true', help='Experimental: form blobs from contrast before scoring whole-region color and shape')
@@ -110,6 +128,10 @@ def main():
     p.add_argument('--ambiguity-margin', type=float, default=.08, help='Required score gap over the runner-up')
     p.add_argument('--output', type=Path, default=Path(__file__).parent/'output'/'fast-track.json')
     a = p.parse_args()
+    player_tracks = None
+    if a.player_tracks:
+        from player_track import CachedPlayerTracks
+        player_tracks = CachedPlayerTracks(a.player_tracks, video=a.video)
     start, x, y = a.seed
     if a.verify_every < 1 or a.max_heavy_calls < 0 or a.heavy_background_samples < 0 or not 0 <= a.min_color_score <= 1 or not 0 <= a.ambiguity_margin <= 1:
         p.error('Invalid verification cadence or color thresholds')
@@ -170,7 +192,8 @@ def main():
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if appearance is None:
             appearance = classify_ball(hsv, lab, position)
-        predicted = position + velocity
+        contact_risk = near_player(player_tracks, last_observed / size, last_observed_time, timestamp)
+        predicted = last_observed if contact_risk and misses else position + velocity
         radius = min(140, 48 + misses*12 + int(np.linalg.norm(velocity)*.5))
         # Keep looking after loss, in a bounded region around actual evidence.
         # Extrapolation across an unseen hit must not move the search away forever.
@@ -188,9 +211,9 @@ def main():
         frame_index = len(records)
         budget_available = detector is not None and (a.max_heavy_calls == 0 or detector.calls < a.max_heavy_calls)
         heavy_checked = budget_available and previous is not None and frame_index >= next_heavy_frame and (not detected or frame_index-last_heavy_frame >= a.verify_every)
-        # Cheap-filter failure alone does not establish that the large crop is
-        # wrong. Expand only after repeated heavy failures, and center on evidence.
-        heavy_center = None if a.full_frame_heavy or heavy_failures >= 2 else np.clip(last_observed / size, 0, 1)
+        # A crop miss near possible contact is enough to widen the next check.
+        fallback_after = 1 if contact_risk else 2
+        heavy_center = None if a.full_frame_heavy or heavy_failures >= fallback_after else np.clip(last_observed / size, 0, 1)
         heavy_result = detector.detect(timestamp, center=heavy_center) if heavy_checked else None
         if heavy_checked:
             last_heavy_frame = frame_index
@@ -215,7 +238,10 @@ def main():
             interval = max(1, (timestamp-last_observed_time)*fps)
             # Old observations across a long occlusion do not establish the
             # current direction (a strike/bounce may have happened unseen).
-            velocity = np.zeros(2) if misses > 5 else .3*velocity + .7*(point-last_observed)/interval
+            if misses > 5 or (contact_risk and misses):
+                velocity = np.zeros(2)
+            else:
+                velocity = .3*velocity + .7*(point-last_observed)/interval
             last_observed, last_observed_time = point.copy(), timestamp
             position = point
             misses = 0
@@ -227,6 +253,10 @@ def main():
             kind, confidence = ('predicted' if misses <= 5 else 'lost'), float(np.exp(-misses/2))
         record = {'timestamp': timestamp, 'position': {'x': float(position[0]/640), 'y': float(position[1]/360)}, 'kind': kind, 'method': 'heavy' if heavy_checked else 'color-motion', 'confidence': confidence, 'uncertaintyRadiusPixels': radius, 'needsDetector': misses > 5}
         record['reviewRequired'] = kind == 'detected' and not heavy_checked
+        if contact_risk:
+            record['possibleContact'] = True
+        if heavy_checked:
+            record['heavySearch'] = 'full-frame' if heavy_center is None else 'crop'
         if visual_candidate is not None and not detected:
             score, point = visual_candidate
             record['recoveryCandidate'] = {'position':{'x':float(point[0]/640),'y':float(point[1]/360)},'score':score,'reviewRequired':True}

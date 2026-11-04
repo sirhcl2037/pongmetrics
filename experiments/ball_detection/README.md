@@ -1,5 +1,9 @@
 # Offline ball detection experiment
 
+## Current temporal neural tracker
+
+See [TRACKING.md](TRACKING.md) for the streaming neural tracker, cached regression fixture, evaluation commands, measured results, and limitations. Localhost now has **Generate ball tracks** and a separate prediction/search overlay. The original detector and color experiments below remain available as references; their historical timings and defaults do not describe the new pipeline.
+
 Player detection/tracking is now available as a separate reusable offline pipeline: see [PLAYERS.md](PLAYERS.md) for YOLO11n + ByteTrack setup, cached outputs, review video, tuning, and measured results.
 
 ## Fast tracking prototype

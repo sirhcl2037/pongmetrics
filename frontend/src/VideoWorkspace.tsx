@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { homography, imageRect, normalizePoint, TABLE, transform, validateCorners, type Point } from './geometry';
 import { parseSession, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
-import { parseDetections } from './ballDetections';
+import { parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
+import { BallTrackingDebug } from './BallTrackingDebug';
 import { PlayerTrackOverlay } from './PlayerTrackOverlay';
 import { parsePlayerTracks, type PlayerTracks } from './playerTracks';
 
@@ -66,6 +67,36 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [ballFps,setBallFps] = useState(25);
   const [threshold,setThreshold] = useState(.5);
   const [showBall,setShowBall] = useState(true);
+  const [trackingFrames, setTrackingFrames] = useState<TrackingFrame[]>([]);
+  const [showBallDebug, setShowBallDebug] = useState(false);
+  const [ballTracking, setBallTracking] = useState(false);
+  const [ballStatus, setBallStatus] = useState('');
+  const ballController = useRef<AbortController | null>(null);
+  useEffect(() => () => ballController.current?.abort(), [file]);
+  async function generateBallTracks() {
+    if (!metadata || ballTracking) return;
+    const controller = new AbortController();
+    ballController.current = controller;
+    setBallTracking(true);
+    setBallStatus('Tracking ball on this computer… Longer clips can take several minutes.');
+    try {
+      const response = await fetch('/api/ball-tracks', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file, signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok) { setBallStatus(data.error || 'Ball tracking failed.'); return; }
+      data.video.name = file.name;
+      const text = JSON.stringify(data);
+      const parsed = parseDetections(text, metadata);
+      const diagnostics = parseTrackingFrames(text);
+      if (controller.signal.aborted) return;
+      setBallObservations(parsed.observations); setBallFps(parsed.fps); setTrackingFrames(diagnostics);
+      setThreshold(.15);
+      setBallStatus(`Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
+    } catch (error) {
+      if (!controller.signal.aborted) setBallStatus(error instanceof Error ? error.message : 'Ball tracking failed.');
+    } finally {
+      if (ballController.current === controller) { setBallTracking(false); ballController.current = null; }
+    }
+  }
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !metadata) return;
@@ -103,7 +134,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       setFps(session.fps); setCalibration(session.calibration); onShots([...session.shots].sort((a,b) => a.time-b.time)); setBallObservations([...session.ballObservations].sort((a,b) => a.timestamp-b.timestamp));
       setDraft(null); setInspect(false); setSelected(null); setMessage('Session imported.');
       onPlayers(session.players); onSelectPlayer(session.selectedPlayerId); onLocate(null);
-      setBallFps(session.ballFps ?? session.fps);
+      setBallFps(session.ballFps ?? session.fps); setTrackingFrames([]);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not import session.'); }
   }
   function exportFile() {
@@ -154,6 +185,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           <svg x={rect.x} y={rect.y} width={rect.width} height={rect.height} viewBox="0 0 1 1" preserveAspectRatio="none">
             {showPlayerTracks && playerTracks && <PlayerTrackOverlay videoRef={videoRef} tracks={playerTracks} />}
             {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} />}
+            {showBallDebug && <BallTrackingDebug videoRef={videoRef} frames={trackingFrames} fps={ballFps} />}
             {players.map((p,i) => p.association && Math.abs(p.association.timestamp-time) < .5/fps && <g key={p.id}><ellipse cx={p.association.position.value.x} cy={p.association.position.value.y} rx=".012" ry=".018" /><text x={p.association.position.value.x+.015} y={p.association.position.value.y} fontSize=".035">P{i+1}: {p.name}</text></g>)}
             {corners.length > 1 && <polyline points={corners.map(p => `${p.x},${p.y}`).join(' ')+(corners.length === 4 ? ` ${corners[0].x},${corners[0].y}` : '')} />}
             {inverse && draft === null && [[{x:0,y:1.37},{x:1.525,y:1.37}],[{x:.7625,y:0},{x:.7625,y:2.74}]].map((line,i) => <polyline key={i} className="table-grid-line" points={line.map(p => transform(inverse,p)).map(p => `${p.x},${p.y}`).join(' ')} />)}
@@ -163,10 +195,11 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       </div>
     </div>
     <div className="calibration-controls">
-      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button><label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label></div>
+      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
+      {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
-        try { const data=parseDetections(await file.text(),metadata); setBallObservations(data.observations); setBallFps(data.fps); setMessage(`Imported ${data.observations.length} raw detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
+        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); setBallObservations(data.observations); setBallFps(data.fps); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
       }} />
       <p>{ballObservations.length} ball observations. Overlay follows decoded video frames; no interpolation across missing frames. Export JSON also saves these observations.</p>
       <div className="workspace-tools">
