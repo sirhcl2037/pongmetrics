@@ -35,12 +35,16 @@ export type TrackingFrame = { timestamp: number; prediction: { x: number; y: num
 export function parseTrackingFrames(text: string): TrackingFrame[] {
   const data = JSON.parse(text);
   if (!Array.isArray(data.trackingFrames)) return [];
-  const frames: TrackingFrame[] = data.trackingFrames;
-  if (frames.some((r, i) => !Number.isFinite(r.timestamp) || r.timestamp < 0 || typeof r.reason !== 'string' ||
-      (i > 0 && r.timestamp <= frames[i-1].timestamp) ||
+  const frames: unknown[] = data.trackingFrames;
+  if (frames.some((value, i) => {
+    if (!value || typeof value !== 'object') return true;
+    const r = value as Partial<TrackingFrame>;
+    return !Number.isFinite(r.timestamp) || (r.timestamp as number) < 0 || typeof r.reason !== 'string' ||
+      (i > 0 && (typeof (frames[i-1] as Partial<TrackingFrame>)?.timestamp !== 'number' || r.timestamp <= (frames[i-1] as Partial<TrackingFrame>).timestamp!)) ||
       (r.prediction !== null && (!r.prediction || !Number.isFinite(r.prediction.x) || !Number.isFinite(r.prediction.y))) ||
-      (r.uncertaintyRadiusPixels !== null && (!Number.isFinite(r.uncertaintyRadiusPixels) || r.uncertaintyRadiusPixels < 0)))) {
+      (r.uncertaintyRadiusPixels !== null && (!Number.isFinite(r.uncertaintyRadiusPixels) || r.uncertaintyRadiusPixels < 0));
+  })) {
     throw new Error('Invalid tracking diagnostics.');
   }
-  return frames;
+  return frames as TrackingFrame[];
 }

@@ -9,6 +9,9 @@ const close = (a: number,b: number) => assert.ok(Math.abs(a-b)<1e-8, `${a} != ${
 test('tracking diagnostics never become observations and require ordered finite values', () => {
   const trackingFrames = [{ timestamp: .04, prediction: { x: 1.2, y: -.1 }, uncertaintyRadiusPixels: 40, reason: 'occluded' }];
   assert.deepEqual(parseTrackingFrames(JSON.stringify({trackingFrames})), trackingFrames);
+  assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:[null]})), /Invalid tracking diagnostics/);
+  assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:['bad']})), /Invalid tracking diagnostics/);
+  assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:[{timestamp:0,prediction:null,uncertaintyRadiusPixels:null}]})), /Invalid tracking diagnostics/);
   assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:[...trackingFrames,...trackingFrames]})));
   assert.throws(() => parseTrackingFrames(JSON.stringify({trackingFrames:[{...trackingFrames[0],uncertaintyRadiusPixels:-1}]})));
   const observations = Array.from({length:10000}, (_,i) => ({timestamp:i/25, position:{value:{x:.5,y:.3},source:'automatic' as const,confidence:.3}}));
