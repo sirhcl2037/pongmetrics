@@ -72,6 +72,12 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [ballTracking, setBallTracking] = useState(false);
   const [ballStatus, setBallStatus] = useState('');
   const ballController = useRef<AbortController | null>(null);
+  function cancelBallTracking() {
+    ballController.current?.abort();
+    ballController.current = null;
+    setBallTracking(false);
+    setBallStatus('');
+  }
   useEffect(() => () => ballController.current?.abort(), [file]);
   async function generateBallTracks() {
     if (!metadata || ballTracking) return;
@@ -82,6 +88,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     try {
       const response = await fetch('/api/ball-tracks', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file, signal: controller.signal });
       const data = await response.json();
+      if (controller.signal.aborted) return;
       if (!response.ok) { setBallStatus(data.error || 'Ball tracking failed.'); return; }
       data.video.name = file.name;
       const text = JSON.stringify(data);
@@ -131,6 +138,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           return;
         }
       }
+      cancelBallTracking();
       setFps(session.fps); setCalibration(session.calibration); onShots([...session.shots].sort((a,b) => a.time-b.time)); setBallObservations([...session.ballObservations].sort((a,b) => a.timestamp-b.timestamp));
       setDraft(null); setInspect(false); setSelected(null); setMessage('Session imported.');
       onPlayers(session.players); onSelectPlayer(session.selectedPlayerId); onLocate(null);
@@ -199,7 +207,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
-        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); setBallObservations(data.observations); setBallFps(data.fps); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
+        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setBallObservations(data.observations); setBallFps(data.fps); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
       }} />
       <p>{ballObservations.length} ball observations. Overlay follows decoded video frames; no interpolation across missing frames. Export JSON also saves these observations.</p>
       <div className="workspace-tools">

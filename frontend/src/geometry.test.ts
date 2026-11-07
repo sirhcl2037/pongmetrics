@@ -27,6 +27,8 @@ test('ball trail drops missing frames and uncertain detections without interpola
   const video={name:'clip.mp4',size:100,width:1280,height:720,duration:9};
   const payload={format:'pongmetrics-ball-detections',version:1,coordinateSystem:'normalized-video-image',video,fps:25,ballObservations:observations};
   assert.equal(parseDetections(JSON.stringify(payload),video).observations.length,4);
+  assert.equal(parseDetections(JSON.stringify({...payload,video:{...video,duration:9.04}}),video).observations.length,4);
+  assert.throws(()=>parseDetections(JSON.stringify({...payload,video:{...video,duration:10}}),video));
   assert.throws(()=>parseDetections(JSON.stringify(payload),{...video,size:101}));
   assert.throws(()=>parseDetections(JSON.stringify({...payload,ballObservations:[observations[0],observations[0]]}),video));
 });

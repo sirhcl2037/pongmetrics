@@ -2,7 +2,11 @@ import { defaultPlayers, parseSession, type BallObservation, type Session } from
 
 export function parseDetections(text: string, video: Session['video']) {
   const data = JSON.parse(text);
-  if (data?.format !== 'pongmetrics-ball-detections' || data.version !== 1 || data.coordinateSystem !== 'normalized-video-image' || !data.video || (Object.keys(video) as (keyof typeof video)[]).some(key => data.video[key] !== video[key])) throw new Error('Detection file must match the loaded video.');
+  // Decoder and container durations may differ by a frame or rounding error.
+  const durationTolerance = Number.isFinite(data?.fps) && data.fps >= 1 ? Math.max(.1, 1 / data.fps) : .1;
+  if (data?.format !== 'pongmetrics-ball-detections' || data.version !== 1 || data.coordinateSystem !== 'normalized-video-image' || !data.video ||
+      ['name', 'size', 'width', 'height'].some(key => data.video[key] !== video[key as keyof typeof video]) ||
+      !Number.isFinite(data.video.duration) || Math.abs(data.video.duration - video.duration) > durationTolerance) throw new Error('Detection file must match the loaded video.');
   const validated = parseSession(JSON.stringify({ ...data, version:2, calibration:null, shots:[], players:defaultPlayers(), selectedPlayerId:'player-1' }));
   if (validated.ballObservations.some(o => o.position.source !== 'automatic' || o.position.confidence === undefined)) throw new Error('Detections require automatic source and confidence.');
   const sorted = validated.ballObservations.sort((a,b) => a.timestamp-b.timestamp);
