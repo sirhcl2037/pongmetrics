@@ -161,6 +161,34 @@ def make_payload(cache, rows, seconds):
                 ballObservations=observations, trackingFrames=rows)
 
 
+def recover_peak_gaps(rows, fps):
+    """Experimental offline confirmation of real maxima between strong anchors."""
+    anchors = [i for i, row in enumerate(rows) if row['position'] is not None and row['confidence'] >= .5]
+    for left, right in zip(anchors, anchors[1:]):
+        a, b = rows[left], rows[right]
+        duration = b['timestamp'] - a['timestamp']
+        if not 1 < right-left <= 6 or duration * fps > 6.1:
+            continue
+        if any(row['sceneCut'] for row in rows[left+1:right+1]):
+            continue
+        for row in rows[left+1:right]:
+            if row['position'] is not None:
+                continue
+            fraction = (row['timestamp'] - a['timestamp']) / duration
+            expected = xy(a['position']) * (1-fraction) + xy(b['position']) * fraction
+            ranked = sorted([(float(np.linalg.norm(xy(c)-expected)), c)
+                             for c in row['candidates'] if c.get('evidence') == 'local-maximum' and c['score'] >= .03],
+                            key=lambda item: item[0])
+            if not ranked or ranked[0][0] > 8:
+                continue
+            if len(ranked) > 1 and ranked[1][0]-ranked[0][0] <= 4:
+                continue
+            candidate = ranked[0][1]
+            row.update(position=dict(x=candidate['x'], y=candidate['y']), kind='observed',
+                       confidence=candidate['score'], reason='two-sided-local-peak-weak-evidence', trackId=a['trackId'])
+    return rows
+
+
 def replay(cache):
     began = time.perf_counter()
     if cache.get('format') != 'pongmetrics-neural-candidates' or not 0 < cache['fps'] <= 240:
@@ -171,8 +199,14 @@ def replay(cache):
         if not isinstance(row['frame'], int) or row['frame'] <= previous_frame:
             raise ValueError('Candidate frame indices must strictly increase')
         previous_frame = row['frame']
-        tracker.update(row['frame'], row['timestamp'], row['candidates'], row.get('sceneCut', False))
-    return make_payload(cache, tracker.finish(), time.perf_counter()-began)
+        original = [c for c in row['candidates'] if c.get('evidence') != 'local-maximum']
+        tracker.update(row['frame'], row['timestamp'], original, row.get('sceneCut', False))
+    rows = tracker.finish()
+    if cache.get('model', {}).get('weakPeaks'):
+        for row, source in zip(rows, cache['frames']):
+            row['candidates'] = source['candidates']
+        rows = recover_peak_gaps(rows, cache['fps'])
+    return make_payload(cache, rows, time.perf_counter()-began)
 
 
 def main():
@@ -182,11 +216,13 @@ def main():
     source.add_argument('--video', type=Path, help='Run streaming TrackNet on a local video')
     p.add_argument('--end', type=float, default=float('inf'))
     p.add_argument('--background-samples', type=int, default=24)
+    p.add_argument('--candidate-floor', type=float, default=.15)
+    p.add_argument('--weak-peaks', action='store_true', help='Experimental additional local maxima; requires validation')
     p.add_argument('--full-frame', action='store_true', help='Disable guided crops for controlled comparisons')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--save-candidates', type=Path)
     a = p.parse_args()
-    if a.end <= 0 or a.background_samples < 0:
+    if a.end <= 0 or a.background_samples < 0 or not 0 < a.candidate_floor < .5:
         p.error('Invalid end or sample count')
     if a.candidates:
         cache = json.loads(a.candidates.read_text(encoding='utf8'))
@@ -194,7 +230,7 @@ def main():
     else:
         from neural_candidates import StreamingDetector
         began = time.perf_counter()
-        detector = StreamingDetector(a.video, a.end, a.background_samples)
+        detector = StreamingDetector(a.video, a.end, a.background_samples, a.candidate_floor, a.weak_peaks)
         tracker = BallTracker(detector.fps)
         source_rows = []
         failures = 0
@@ -211,11 +247,12 @@ def main():
             if center is not None and guidance and not any(c['score'] >= .5 for c in candidates):
                 # A weak peak near the prediction can lose confidence when the
                 # crop removes context. Retry THIS frame before discarding it.
-                if any(np.linalg.norm(xy(c)-guidance[0]) <= guidance[1] for c in candidates):
+                if any(c['score'] >= .15 and np.linalg.norm(xy(c)-guidance[0]) <= guidance[1] for c in candidates):
                     candidates = detector.detect(history)
                     rescue_calls += 1
                     rescued = True
-            row = tracker.update(i, timestamp, candidates, cut)
+            original = [c for c in candidates if c.get('evidence') != 'local-maximum']
+            row = tracker.update(i, timestamp, original, cut)
             row['search'] = 'full-frame-rescue' if rescued else 'crop' if center is not None else 'full-frame'
             failures = 0 if row['position'] else failures+1
             source_rows.append(dict(frame=i, timestamp=timestamp, candidates=candidates, sceneCut=cut, search=row['search']))
@@ -224,12 +261,17 @@ def main():
         cache = dict(format='pongmetrics-neural-candidates', version=1, video=detector.video,
                      fps=detector.fps, frames=source_rows,
                      model=dict(name='RacketVision TrackNetV3', weightsSha256=detector.weights_hash,
-                                backgroundSamples=detector.background_sample_count, candidateFloor=.15,
+                                backgroundSamples=detector.background_sample_count, candidateFloor=a.candidate_floor, weakPeaks=a.weak_peaks,
                                 temporalOrder='background,BGR[i-3],BGR[i-2],BGR[i-1],BGR[i]; repeat first'),
                      summary=dict(heavyCalls=detector.calls, cropCalls=detector.crop_calls,
                                   fullFrameCalls=detector.full_frame_calls, sameFrameRescueCalls=rescue_calls, startupSeconds=detector.startup_seconds,
                                   inferenceSeconds=detector.inference_seconds, totalSeconds=time.perf_counter()-began))
-        payload = make_payload(cache, tracker.finish(), time.perf_counter()-began-detector.startup_seconds-detector.inference_seconds)
+        rows = tracker.finish()
+        if a.weak_peaks:
+            for row, source in zip(rows, source_rows):
+                row['candidates'] = source['candidates']
+            rows = recover_peak_gaps(rows, detector.fps)
+        payload = make_payload(cache, rows, time.perf_counter()-began-detector.startup_seconds-detector.inference_seconds)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(payload, indent=2), encoding='utf8')
     if a.save_candidates:

@@ -143,7 +143,10 @@ function App() {
           {visibleShots.length ? <div className="shot-list"><div className="shot-table-heading"><span>SHOT</span><span>TIMESTAMP</span><span>WING</span><span>STROKE</span><span /></div>{visibleShots.map(shot => <div className="shot-entry" key={shot.id}><span className="shot-number">#{(shots.indexOf(shot) + 1).toString().padStart(2, '0')}</span><button className="time-link" onClick={() => jumpTo(shot.time)} aria-label={`Jump to ${timestamp(shot.time)}`}><span aria-hidden="true">▷</span> {timestamp(shot.time)}</button><span className={`wing-tag ${shot.wing === 'FH' ? 'fh-tag' : 'bh-tag'}`}>{shot.wing === 'FH' ? 'Forehand' : 'Backhand'}</span><span className="stroke-name">{shot.stroke}<br /><small>{players.find(p => p.id === shot.playerId)?.name ?? 'Unassigned'}</small></span><button className="remove-button" onClick={() => removeShot(shot.id)} aria-label={`Remove shot ${shots.indexOf(shot) + 1}`} title="Remove shot">×</button></div>)}</div> : <div className="timeline-empty"><span className="empty-icon" aria-hidden="true">≡</span><h3>{shots.length ? 'No shots in this view' : 'Your rally starts here'}</h3><p>{shots.length ? 'Try a different wing filter to see your tagged shots.' : 'Tagged shots appear here. Click a timestamp to revisit the moment.'}</p></div>}
           <div className="timeline-footer"><span>{visibleShots.length} {visibleShots.length === 1 ? 'shot' : 'shots'} shown</span><span>Export JSON to save annotations before changing videos or reloading.</span></div>
         </section>
-        <footer className="page-footer"><span>PONGMETRICS</span><span>A closer look at your game.</span></footer>
+        <footer className="page-footer"><span>PONGMETRICS</span><span className="build-version" title={`Commit ${__BUILD_INFO__.commit}${__BUILD_INFO__.dirty ? ' · uncommitted changes included' : ''}`}>
+          Build {__BUILD_INFO__.commit.slice(0, 8)}{__BUILD_INFO__.dirty ? '-local' : ''}
+          <time dateTime={__BUILD_INFO__.builtAt}>{__BUILD_INFO__.builtAt.slice(0, 19).replace('T', ' ')} UTC</time>
+        </span></footer>
       </main>
     </div>
   );

@@ -40,9 +40,27 @@ def extract_candidates(heatmap, offset=(0, 0), floor=.15):
     return sorted(result, key=lambda c: c['score'], reverse=True)
 
 
+def extract_weak_peaks(heatmap, offset=(0, 0), floor=.01):
+    """Experimental isolated maxima, avoiding centroids of diffuse weak regions."""
+    maxima = cv2.dilate(heatmap, np.ones((7, 7), dtype=np.uint8))
+    mask = ((heatmap == maxima) & (heatmap >= floor) & (heatmap < .5)).astype(np.uint8)
+    count, components, _, centers = cv2.connectedComponentsWithStats(mask)
+    result = []
+    for index in range(1, count):
+        x, y = np.rint(centers[index]).astype(int)
+        score = float(heatmap[components == index].max())
+        result.append(dict(x=float((x + offset[0])/512), y=float((y + offset[1])/288),
+                           score=score, area=1, threshold=floor, evidence='local-maximum'))
+    return sorted(result, key=lambda c: c['score'], reverse=True)[:100]
+
+
 class StreamingDetector:
     """Four source frames and a bounded sampled background; no clip-sized array."""
-    def __init__(self, video, end=float('inf'), background_samples=24):
+    def __init__(self, video, end=float('inf'), background_samples=24, candidate_floor=.15, weak_peaks=False):
+        if not 0 < candidate_floor < .5:
+            raise ValueError('Candidate floor must be between zero and .5')
+        self.candidate_floor = candidate_floor
+        self.weak_peaks = weak_peaks
         began = time.perf_counter()
         self.video_path = Path(video)
         cap = cv2.VideoCapture(str(video))
@@ -139,7 +157,9 @@ class StreamingDetector:
             heatmap = self.model(frames=tensor)[0][0, 0].numpy()
         self.inference_seconds += time.perf_counter()-began
         self.calls += 1
-        candidates = extract_candidates(heatmap, (left, top))
+        candidates = extract_candidates(heatmap, (left, top), self.candidate_floor)
+        if self.weak_peaks:
+            candidates.extend(extract_weak_peaks(heatmap, (left, top)))
         if center is not None:
             candidates = [c for c in candidates if left+4 <= c['x']*512 < left+width-4
                           and top+4 <= c['y']*288 < top+height-4]

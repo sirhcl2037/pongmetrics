@@ -4,6 +4,19 @@ import { homography, transform, TABLE, validateCorners, imageRect, normalizePoin
 import { parseSession, defaultPlayers } from './session.ts';
 import { ballTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
 import { playerTrackNames, type PlayerTracks } from './playerTracks.ts';
+import { parseReviewDraft } from './reviewDraft.ts';
+
+test('review drafts preserve human decisions and proposals and reject a different clip', () => {
+  const video = {name:'review.mp4',size:100,width:1280,height:720,duration:9};
+  const label = {frameIndex:0,timestamp:0,visibility:'visible',position:{value:{x:.4,y:.5},source:'manual'},
+    review:{action:'accepted',proposal:{x:.4,y:.5},confidence:.8}};
+  const draft = {version:1,video,fps:25,ballFps:25,labels:[label],time:0,
+    observations:[{timestamp:0,position:{value:{x:.4,y:.5},source:'automatic',confidence:.8}}]};
+  assert.deepEqual(parseReviewDraft(JSON.stringify(draft),video).labels,[label]);
+  assert.throws(() => parseReviewDraft(JSON.stringify(draft),{...video,size:101}));
+  assert.throws(() => parseReviewDraft(JSON.stringify({...draft,labels:[label,label]}),video));
+  assert.throws(() => parseReviewDraft(JSON.stringify({...draft,labels:[{...label,visibility:'occluded'}]}),video));
+});
 
 test('saved player clicks bind names to track IDs and reject ambiguous assignments', () => {
   const tracks: PlayerTracks = { fps:25, firstTimestamp:0, frames:new Map([[0, [

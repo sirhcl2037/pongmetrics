@@ -142,7 +142,8 @@ h2 { font-size: 14px; font-weight: 600; letter-spacing: -.1px; }
 .stroke-name { color: #bca8b3; font-size: 11px; }
 .remove-button { width: 28px; height: 28px; background: transparent; border: 0; color: #b49ea9; border-radius: 5px; font-size: 20px; }
 .remove-button:hover { background: #e78b8b12; color: #efaaaa; }
-.page-footer { display: flex; justify-content: space-between; padding: 25px 0 28px; font-size: 10px; color: #a28b96; }
+.page-footer { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 25px 0 28px; font-size: 10px; color: #a28b96; }
+.build-version { display: flex; flex-wrap: wrap; gap: 6px 12px; font-variant-numeric: tabular-nums; }
 .page-footer > span:first-child { font-size: 8px; letter-spacing: 2px; font-weight: 700; }
 
 @media (min-width:1500px) {

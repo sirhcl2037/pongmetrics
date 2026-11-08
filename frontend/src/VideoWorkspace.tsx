@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { homography, imageRect, normalizePoint, TABLE, transform, validateCorners, type Point } from './geometry';
 import { parseSession, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
-import { parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
+import { ballTrail, parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
+import { parseReviewDraft, reviewDraftKey } from './reviewDraft';
 import { BallTrackingDebug } from './BallTrackingDebug';
 import { PlayerTrackOverlay } from './PlayerTrackOverlay';
 import { BallLabeler, type BallLabel } from './BallLabeler';
@@ -14,21 +15,32 @@ type Props = { url: string; file: File; videoRef: RefObject<HTMLVideoElement | n
 
 export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, players, selectedPlayerId, onPlayers, onSelectPlayer, locatingPlayerId, onLocate }: Props) {
   const { name, size } = file;
+  const [savedReview] = useState(() => {
+    try {
+      const text = localStorage.getItem(reviewDraftKey(file));
+      return text ? parseReviewDraft(text, file) : null;
+    } catch { return null; }
+  });
+  const [storageStatus, setStorageStatus] = useState(savedReview ? 'Saved review restored.' : 'Progress saves locally in this browser.');
   const displayedTime = useVideoFrameTime(videoRef);
-  const [fps, setFps] = useState(25);
+  const [fps, setFps] = useState(savedReview?.fps ?? 25);
   const [labeling, setLabeling] = useState(false);
-  const [ballLabels, setBallLabels] = useState<BallLabel[]>([]);
+  const [ballLabels, setBallLabels] = useState<BallLabel[]>(savedReview?.labels ?? []);
+  const [autoAdvance, setAutoAdvance] = useState(true);
   const currentLabel = ballLabels.find(label => Math.abs(label.timestamp - displayedTime) < .000001);
-  function saveBallLabel(visibility: BallLabel['visibility'], point: Point | null = null) {
+  function saveBallLabel(visibility: BallLabel['visibility'], point: Point | null = null, accepted = false) {
     const video = videoRef.current;
-    if (!video || !video.paused || video.seeking || video.readyState < 2) {
+    if (!video || !video.paused || video.seeking || video.readyState < 2 || Math.abs(video.currentTime - displayedTime) > .75 / fps) {
       setMessage('Pause and wait for the frame to load before labeling.');
       return;
     }
     const label: BallLabel = { frameIndex: Math.round(displayedTime * fps), timestamp: displayedTime,
-      visibility, position: point ? { value: point, source: 'manual' } : null };
+      visibility, position: point ? { value: point, source: 'manual' } : null,
+      review: { action: accepted ? 'accepted' : point ? 'corrected' : 'visibility',
+        proposal: proposal?.value ?? null, confidence: proposal?.confidence } };
     setBallLabels(previous => [...previous.filter(row => Math.abs(row.timestamp - displayedTime) >= .000001), label]);
     setMessage('Ball label saved.');
+    if (autoAdvance) seek(1);
   }
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
   const [calibration, setCalibration] = useState<Session['calibration']>(null);
@@ -37,7 +49,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [selected, setSelected] = useState<Point | null>(null);
   const [message, setMessage] = useState('');
   const [time, setTime] = useState(0);
-  const [ballObservations, setBallObservations] = useState<Session['ballObservations']>([]);
+  const [ballObservations, setBallObservations] = useState<Session['ballObservations']>(savedReview?.observations ?? []);
   const [rect, setRect] = useState({ x: 0, y: 0, width: 1, height: 1 });
   const importRef = useRef<HTMLInputElement>(null);
   const detectionRef = useRef<HTMLInputElement>(null);
@@ -49,7 +61,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [trackingAttempt, setTrackingAttempt] = useState(0);
   const localTracking = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
   useEffect(() => {
-    if (!metadata || !localTracking) return;
+    if (!metadata || !localTracking || trackingAttempt === 0) return;
     const controller = new AbortController();
     async function generateTracks(video: Session['video']) {
       setTrackingStatus('Tracking players… You can annotate while this runs.');
@@ -81,7 +93,23 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     void generateTracks(metadata);
     return () => controller.abort();
   }, [file, metadata, localTracking, trackingAttempt]);
-  const [ballFps,setBallFps] = useState(25);
+  const [ballFps,setBallFps] = useState(savedReview?.ballFps ?? 25);
+  const proposal = ballTrail(ballObservations, displayedTime, ballFps, 0).at(-1)?.position ?? null;
+  useEffect(() => {
+    if (!metadata) return;
+    const text = JSON.stringify({ version:1, video:metadata, fps, ballFps,
+      labels:ballLabels, observations:ballObservations, time:ballLabels.at(-1)?.timestamp ?? savedReview?.time ?? 0 });
+    const persist = () => {
+      try { localStorage.setItem(reviewDraftKey(file), text); return true; }
+      catch { return false; }
+    };
+    const timer = window.setTimeout(() => {
+      if (!persist()) setStorageStatus('Local saving failed. Export ball labels before closing this tab.');
+    }, 100);
+    const flush = () => { persist(); };
+    window.addEventListener('pagehide', flush);
+    return () => { window.clearTimeout(timer); window.removeEventListener('pagehide', flush); flush(); };
+  }, [file, metadata, fps, ballFps, ballLabels, ballObservations, savedReview]);
   const [threshold,setThreshold] = useState(.5);
   const [showBall,setShowBall] = useState(true);
   const [trackingFrames, setTrackingFrames] = useState<TrackingFrame[]>([]);
@@ -113,6 +141,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       const diagnostics = parseTrackingFrames(text);
       if (controller.signal.aborted) return;
       setBallObservations(parsed.observations); setBallFps(parsed.fps); setTrackingFrames(diagnostics);
+      setFps(parsed.fps);
       setThreshold(.15);
       setBallStatus(`Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
     } catch (error) {
@@ -137,8 +166,27 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     const video = videoRef.current;
     if (!video || !metadata) return;
     video.pause();
-    video.currentTime = Math.max(0, Math.min(metadata.duration, (Math.round(video.currentTime*fps)+direction)/fps));
+    // Seek inside the frame interval to avoid decoder rounding at its boundary.
+    const frame = Math.floor(video.currentTime * fps + 1e-6);
+    const targetFrame = Math.max(0, frame + direction);
+    video.currentTime = Math.min(Math.max(0, metadata.duration - .000001), (targetFrame + .5) / fps);
     onTime(video.currentTime);
+  }
+  function nextUnreviewed() {
+    const video = videoRef.current;
+    if (!video || !metadata) return;
+    const reviewed = new Set(ballLabels.map(label => Math.round(label.timestamp * fps)));
+    const total = Math.ceil(metadata.duration * fps);
+    const start = Math.round(displayedTime * fps);
+    for (let step = 1; step <= total; step++) {
+      const frame = (start + step) % total;
+      if (!reviewed.has(frame)) {
+        video.pause();
+        video.currentTime = Math.min(metadata.duration-.000001, (frame+.5)/fps);
+        return;
+      }
+    }
+    setMessage('All frames reviewed. Export your labels.');
   }
   function startCalibration() {
     videoRef.current?.pause();
@@ -176,6 +224,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         <video ref={videoRef} src={url} controls onTimeUpdate={e => { onTime(e.currentTarget.currentTime); setTime(e.currentTarget.currentTime); }} onSeeked={e => { onTime(e.currentTarget.currentTime); setTime(e.currentTarget.currentTime); }} onLoadedMetadata={e => {
           const v = e.currentTarget;
           setMetadata({ name, size, width: v.videoWidth, height: v.videoHeight, duration: v.duration });
+          if (savedReview) v.currentTime = Math.min(savedReview.time, Math.max(0, v.duration-.000001));
           const update = () => { const r = imageRect(v.clientWidth, v.clientHeight, v.videoWidth, v.videoHeight); setRect({x:r.x/v.clientWidth,y:r.y/v.clientHeight,width:r.width/v.clientWidth,height:r.height/v.clientHeight}); };
           update();
         }} onError={() => setMessage('Video cannot be played. Try a compatible MP4 file.')} />
@@ -216,7 +265,10 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         }}>
           {(labeling || locatingPlayerId) && <rect x="0" y="0" width="1" height="1" fill="transparent" pointerEvents="all" />}
           <svg x={rect.x} y={rect.y} width={rect.width} height={rect.height} viewBox="0 0 1 1" preserveAspectRatio="none">
-            {labeling ? currentLabel?.position && <ellipse cx={currentLabel.position.value.x} cy={currentLabel.position.value.y} rx=".006" ry=".01" /> : <>
+            {labeling ? <>
+              {proposal && !currentLabel && <g className="ball-trajectory"><ellipse cx={proposal.value.x} cy={proposal.value.y} rx=".007" ry=".012" /><title>Detector proposal — awaiting your review</title></g>}
+              {currentLabel?.position && <ellipse cx={currentLabel.position.value.x} cy={currentLabel.position.value.y} rx=".006" ry=".01" />}
+            </> : <>
             {(showPlayerTracks || locatingPlayerId !== null) && playerTracks && <PlayerTrackOverlay time={displayedTime} tracks={playerTracks} players={players} />}
             {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} />}
             {showBallDebug && <BallTrackingDebug videoRef={videoRef} frames={trackingFrames} fps={ballFps} />}
@@ -231,18 +283,22 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     </div>
     <BallLabeler enabled={labeling} onToggle={() => { videoRef.current?.pause(); setLabeling(!labeling); setDraft(null); setInspect(false); onLocate(null); }}
       time={displayedTime} fps={fps} video={metadata} labels={ballLabels} onLabel={saveBallLabel}
-      onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek} />
+      onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek}
+      proposal={proposal} onAccept={() => { if (proposal) saveBallLabel('visible', proposal.value, true); }}
+      onNextUnreviewed={nextUnreviewed} autoAdvance={autoAdvance} onAutoAdvance={setAutoAdvance}
+      onGenerate={localTracking ? () => void generateBallTracks() : null} generating={ballTracking} status={[ballStatus, message].filter(Boolean).join(' ')} storageStatus={storageStatus} />
     <div className="calibration-controls">
       <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
-        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setBallObservations(data.observations); setBallFps(data.fps); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
+        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setBallObservations(data.observations); setBallFps(data.fps); setFps(data.fps); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
       }} />
       <p>{ballObservations.length} ball observations. Overlay follows decoded video frames; no interpolation across missing frames. Export JSON also saves these observations.</p>
       <div className="workspace-tools">
         <button disabled={!metadata} onClick={() => playerTrackRef.current?.click()}>Import player tracks</button>
         <label><input type="checkbox" checked={showPlayerTracks} onChange={e => setShowPlayerTracks(e.target.checked)} /> Player overlay</label>
+        {localTracking && !playerTracks && !trackingFailed && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking players')} onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Generate player tracks</button>}
         {trackingFailed && <button onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Retry player tracking</button>}
         {playerTracks && <button onClick={() => {
           const video = videoRef.current;

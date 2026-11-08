@@ -15,8 +15,8 @@ export function useVideoFrameTime(videoRef: RefObject<HTMLVideoElement | null>) 
       id = video.requestVideoFrameCallback(frame);
     } else {
       video.addEventListener('timeupdate', update);
+      video.addEventListener('seeked', update);
     }
-    video.addEventListener('seeked', update);
     update();
     return () => {
       if (id !== undefined) video.cancelVideoFrameCallback(id);
