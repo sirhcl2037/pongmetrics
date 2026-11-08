@@ -5,6 +5,7 @@ import { BallTrajectory } from './BallTrajectory';
 import { parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
 import { BallTrackingDebug } from './BallTrackingDebug';
 import { PlayerTrackOverlay } from './PlayerTrackOverlay';
+import { BallLabeler, type BallLabel } from './BallLabeler';
 import { useVideoFrameTime } from './useVideoFrameTime';
 import { clickedPlayerTrack, parsePlayerTracks, type PlayerTracks } from './playerTracks';
 
@@ -15,6 +16,20 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const { name, size } = file;
   const displayedTime = useVideoFrameTime(videoRef);
   const [fps, setFps] = useState(25);
+  const [labeling, setLabeling] = useState(false);
+  const [ballLabels, setBallLabels] = useState<BallLabel[]>([]);
+  const currentLabel = ballLabels.find(label => Math.abs(label.timestamp - displayedTime) < .000001);
+  function saveBallLabel(visibility: BallLabel['visibility'], point: Point | null = null) {
+    const video = videoRef.current;
+    if (!video || !video.paused || video.seeking || video.readyState < 2) {
+      setMessage('Pause and wait for the frame to load before labeling.');
+      return;
+    }
+    const label: BallLabel = { frameIndex: Math.round(displayedTime * fps), timestamp: displayedTime,
+      visibility, position: point ? { value: point, source: 'manual' } : null };
+    setBallLabels(previous => [...previous.filter(row => Math.abs(row.timestamp - displayedTime) >= .000001), label]);
+    setMessage('Ball label saved.');
+  }
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
   const [calibration, setCalibration] = useState<Session['calibration']>(null);
   const [draft, setDraft] = useState<Point[] | null>(null);
@@ -164,13 +179,14 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           const update = () => { const r = imageRect(v.clientWidth, v.clientHeight, v.videoWidth, v.videoHeight); setRect({x:r.x/v.clientWidth,y:r.y/v.clientHeight,width:r.width/v.clientWidth,height:r.height/v.clientHeight}); };
           update();
         }} onError={() => setMessage('Video cannot be played. Try a compatible MP4 file.')} />
-        <svg className={`calibration-overlay ${draft !== null || inspect || locatingPlayerId ? 'interactive' : ''}`} viewBox="0 0 1 1" preserveAspectRatio="none" aria-label="Table calibration overlay" onPointerDown={e => {
+        <svg className={`calibration-overlay ${labeling || draft !== null || inspect || locatingPlayerId ? 'interactive' : ''}`} viewBox="0 0 1 1" preserveAspectRatio="none" aria-label="Table calibration overlay" onPointerDown={e => {
           const video = videoRef.current;
-          if (!video || !metadata || (draft === null && !inspect && !locatingPlayerId)) return;
+          if (!video || !metadata || (!labeling && draft === null && !inspect && !locatingPlayerId)) return;
           const bounds = e.currentTarget.getBoundingClientRect();
           const actual = imageRect(bounds.width, bounds.height, metadata.width, metadata.height);
           const point = normalizePoint({ x: e.clientX-bounds.left, y: e.clientY-bounds.top }, actual);
           if (!point) return;
+          if (labeling) { saveBallLabel('visible', point); return; }
           video.pause();
           if (locatingPlayerId) {
             if (!playerTracks) { setMessage('Player tracking is still loading. Try again when the boxes appear.'); return; }
@@ -198,8 +214,9 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
             } catch (error) { setMessage((error as Error).message); }
           }
         }}>
-          {locatingPlayerId && <rect x="0" y="0" width="1" height="1" fill="transparent" pointerEvents="all" />}
+          {(labeling || locatingPlayerId) && <rect x="0" y="0" width="1" height="1" fill="transparent" pointerEvents="all" />}
           <svg x={rect.x} y={rect.y} width={rect.width} height={rect.height} viewBox="0 0 1 1" preserveAspectRatio="none">
+            {labeling ? currentLabel?.position && <ellipse cx={currentLabel.position.value.x} cy={currentLabel.position.value.y} rx=".006" ry=".01" /> : <>
             {(showPlayerTracks || locatingPlayerId !== null) && playerTracks && <PlayerTrackOverlay time={displayedTime} tracks={playerTracks} players={players} />}
             {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} />}
             {showBallDebug && <BallTrackingDebug videoRef={videoRef} frames={trackingFrames} fps={ballFps} />}
@@ -207,10 +224,14 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
             {corners.length > 1 && <polyline points={corners.map(p => `${p.x},${p.y}`).join(' ')+(corners.length === 4 ? ` ${corners[0].x},${corners[0].y}` : '')} />}
             {inverse && draft === null && [[{x:0,y:1.37},{x:1.525,y:1.37}],[{x:.7625,y:0},{x:.7625,y:2.74}]].map((line,i) => <polyline key={i} className="table-grid-line" points={line.map(p => transform(inverse,p)).map(p => `${p.x},${p.y}`).join(' ')} />)}
             {corners.map((p,i) => <g key={i}><ellipse cx={p.x} cy={p.y} rx=".009" ry=".014" /><text x={p.x+.012} y={p.y-.014} fontSize=".035">{i+1}</text></g>)}
+            </>}
           </svg>
         </svg>
       </div>
     </div>
+    <BallLabeler enabled={labeling} onToggle={() => { videoRef.current?.pause(); setLabeling(!labeling); setDraft(null); setInspect(false); onLocate(null); }}
+      time={displayedTime} fps={fps} video={metadata} labels={ballLabels} onLabel={saveBallLabel}
+      onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek} />
     <div className="calibration-controls">
       <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
       {ballStatus && <p role="status">{ballStatus}</p>}
