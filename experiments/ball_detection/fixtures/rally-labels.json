@@ -1,0 +1,43 @@
+{
+  "format": "pongmetrics-ball-labels",
+  "version": 1,
+  "video": {
+    "name": "Wang Chuqin vs Sora Matsushima Match Highlights #ITTFWorldCup 2026.mp4",
+    "size": 450268,
+    "width": 1280,
+    "height": 720,
+    "duration": 8.76
+  },
+  "fps": 25,
+  "annotation": "Exploratory visual labels by Codex from decoded images, including neighboring frames at contacts. Coordinates manually estimated at 640x360, then normalized. Systematic every-tenth-frame sample plus all seven added full-frame detections and frame 75. Unclear cases deliberately excluded as uncertain. This is a small development set, not independent human ground truth or a precision benchmark on negative frames.",
+  "frames": [
+    {"frame": 0, "status": "visible", "position": {"x": 0.4578125, "y": 0.1277777778}},
+    {"frame": 10, "status": "visible", "position": {"x": 0.44375, "y": 0.1638888889}},
+    {"frame": 20, "status": "visible", "position": {"x": 0.4390625, "y": 0.3722222222}},
+    {"frame": 30, "status": "uncertain"},
+    {"frame": 40, "status": "visible", "position": {"x": 0.5, "y": 0.3583333333}},
+    {"frame": 42, "status": "uncertain", "note": "Ball/racket/clothing overlap; unable to label reliably."},
+    {"frame": 50, "status": "visible", "position": {"x": 0.53125, "y": 0.4388888889}},
+    {"frame": 60, "status": "uncertain"},
+    {"frame": 67, "status": "uncertain", "note": "Ball/leg/table-edge overlap."},
+    {"frame": 70, "status": "visible", "position": {"x": 0.478125, "y": 0.4555555556}},
+    {"frame": 75, "status": "uncertain", "note": "Contact blur; no reliable center."},
+    {"frame": 80, "status": "visible", "position": {"x": 0.440625, "y": 0.3722222222}},
+    {"frame": 90, "status": "uncertain"},
+    {"frame": 95, "status": "uncertain", "note": "Ball/net-corner/hand ambiguity."},
+    {"frame": 100, "status": "uncertain"},
+    {"frame": 110, "status": "visible", "position": {"x": 0.48125, "y": 0.4944444444}},
+    {"frame": 120, "status": "visible", "position": {"x": 0.53125, "y": 0.375}},
+    {"frame": 130, "status": "uncertain"},
+    {"frame": 140, "status": "uncertain"},
+    {"frame": 150, "status": "uncertain"},
+    {"frame": 160, "status": "visible", "position": {"x": 0.4796875, "y": 0.4277777778}},
+    {"frame": 170, "status": "visible", "position": {"x": 0.5203125, "y": 0.2833333333}, "note": "White vertical streak over far player's shorts/thigh, also inspected in adjacent frames."},
+    {"frame": 171, "status": "uncertain"},
+    {"frame": 177, "status": "uncertain", "note": "Ball merges with net line."},
+    {"frame": 178, "status": "uncertain", "note": "Ball merges with net line."},
+    {"frame": 180, "status": "uncertain"},
+    {"frame": 190, "status": "uncertain"},
+    {"frame": 200, "status": "visible", "position": {"x": 0.6296875, "y": 0.4611111111}, "note": "Small white spot left of near player's upper body; both pipelines miss it."}
+  ]
+}

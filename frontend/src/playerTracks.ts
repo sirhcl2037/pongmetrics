@@ -1,4 +1,5 @@
-import type { Session } from './session';
+import type { Player, Session } from './session';
+import type { Point } from './geometry';
 
 type PlayerBox = {
   trackId: number;
@@ -6,11 +7,38 @@ type PlayerBox = {
   box: { x: number; y: number; width: number; height: number };
 };
 
+export function clickedPlayerTrack(tracks: PlayerTracks, timestamp: number, point: Point): PlayerBox | null {
+  const people = tracks.frames.get(Math.round(timestamp * tracks.fps)) ?? [];
+  const matches = people.filter(({ box }) => point.x >= box.x && point.x <= box.x + box.width &&
+    point.y >= box.y && point.y <= box.y + box.height);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export type PlayerTracks = {
   fps: number;
   firstTimestamp: number;
   frames: Map<number, PlayerBox[]>;
 };
+
+// Reuse saved image clicks so session imports and later tracking imports also bind names.
+export function playerTrackNames(tracks: PlayerTracks, players: Player[]): Map<number, string> {
+  const names = new Map<number, string>();
+  const claimed = new Set<number>();
+  for (const player of players) {
+    if (!player.association) continue;
+    const { timestamp, position } = player.association;
+    const match = clickedPlayerTrack(tracks, timestamp, position.value);
+    if (!match) continue;
+    const { trackId } = match;
+    if (claimed.has(trackId)) {
+      names.delete(trackId);
+      continue;
+    }
+    claimed.add(trackId);
+    names.set(trackId, player.name);
+  }
+  return names;
+}
 
 export function parsePlayerTracks(text: string, video: Session['video']): PlayerTracks {
   const data = JSON.parse(text);

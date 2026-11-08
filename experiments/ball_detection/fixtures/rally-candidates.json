@@ -1,0 +1,2555 @@
+{
+  "format": "pongmetrics-neural-candidates",
+  "version": 1,
+  "video": {
+    "name": "Wang Chuqin vs Sora Matsushima Match Highlights #ITTFWorldCup 2026.mp4",
+    "size": 450268,
+    "width": 1280,
+    "height": 720,
+    "duration": 8.76
+  },
+  "fps": 25.0,
+  "model": {
+    "weightsSha256": "00d707b9db7a49561c411e4765956e79bcd7c7e20c7a0a535073440b3e972342",
+    "backgroundSamples": 207,
+    "candidateFloor": 0.15,
+    "temporalOrder": "background,BGR[i-3],BGR[i-2],BGR[i-1],BGR[i]; repeat first"
+  },
+  "summary": {
+    "frames": 207,
+    "heavyCalls": 207,
+    "startupSeconds": 9.836881099967286,
+    "inferenceSeconds": 112.98256899998523,
+    "totalSeconds": 124.37846859986894
+  },
+  "frames": [
+    {
+      "frame": 0,
+      "timestamp": 0.0,
+      "candidates": [
+        {
+          "x": 0.45698969414893614,
+          "y": 0.12559101654846336,
+          "score": 0.7112281918525696,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 1,
+      "timestamp": 0.04,
+      "candidates": [
+        {
+          "x": 0.45698969414893614,
+          "y": 0.12559101654846336,
+          "score": 0.7092149257659912,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 2,
+      "timestamp": 0.08,
+      "candidates": [
+        {
+          "x": 0.45698969414893614,
+          "y": 0.12559101654846336,
+          "score": 0.7091958522796631,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 3,
+      "timestamp": 0.12,
+      "candidates": [
+        {
+          "x": 0.45698969414893614,
+          "y": 0.12559101654846336,
+          "score": 0.7098187804222107,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 4,
+      "timestamp": 0.16,
+      "candidates": [
+        {
+          "x": 0.45698969414893614,
+          "y": 0.12559101654846336,
+          "score": 0.710629403591156,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 5,
+      "timestamp": 0.2,
+      "candidates": [
+        {
+          "x": 0.45698969414893614,
+          "y": 0.12559101654846336,
+          "score": 0.7107027769088745,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 6,
+      "timestamp": 0.24,
+      "candidates": [
+        {
+          "x": 0.45369944852941174,
+          "y": 0.12690631808278865,
+          "score": 0.7252383828163147,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 7,
+      "timestamp": 0.28,
+      "candidates": [
+        {
+          "x": 0.45159313725490197,
+          "y": 0.13085511982570808,
+          "score": 0.7197636365890503,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 8,
+      "timestamp": 0.32,
+      "candidates": [
+        {
+          "x": 0.4482421875,
+          "y": 0.13808760683760682,
+          "score": 0.7210425734519958,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 9,
+      "timestamp": 0.36,
+      "candidates": [
+        {
+          "x": 0.44577205882352944,
+          "y": 0.14848856209150327,
+          "score": 0.7239604592323303,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 10,
+      "timestamp": 0.4,
+      "candidates": [
+        {
+          "x": 0.44189453125,
+          "y": 0.16105769230769232,
+          "score": 0.7362808585166931,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 11,
+      "timestamp": 0.44,
+      "candidates": [
+        {
+          "x": 0.439453125,
+          "y": 0.1748611111111111,
+          "score": 0.7336018085479736,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 12,
+      "timestamp": 0.48,
+      "candidates": [
+        {
+          "x": 0.43704927884615385,
+          "y": 0.19270833333333334,
+          "score": 0.7252704501152039,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 13,
+      "timestamp": 0.52,
+      "candidates": [
+        {
+          "x": 0.4342064950980392,
+          "y": 0.21255446623093682,
+          "score": 0.7313098311424255,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 14,
+      "timestamp": 0.56,
+      "candidates": [
+        {
+          "x": 0.4317172181372549,
+          "y": 0.23461328976034856,
+          "score": 0.7188107967376709,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 15,
+      "timestamp": 0.6,
+      "candidates": [
+        {
+          "x": 0.4287109375,
+          "y": 0.25569444444444445,
+          "score": 0.7076923251152039,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 16,
+      "timestamp": 0.64,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 17,
+      "timestamp": 0.68,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 18,
+      "timestamp": 0.72,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 19,
+      "timestamp": 0.76,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 20,
+      "timestamp": 0.8,
+      "candidates": [
+        {
+          "x": 0.4384765625,
+          "y": 0.3732638888888889,
+          "score": 0.7209195494651794,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 21,
+      "timestamp": 0.84,
+      "candidates": [
+        {
+          "x": 0.44424019607843135,
+          "y": 0.37397875816993464,
+          "score": 0.722374677658081,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 22,
+      "timestamp": 0.88,
+      "candidates": [
+        {
+          "x": 0.45006127450980393,
+          "y": 0.37683823529411764,
+          "score": 0.7287436127662659,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 23,
+      "timestamp": 0.92,
+      "candidates": [
+        {
+          "x": 0.4560546875,
+          "y": 0.3836805555555556,
+          "score": 0.7256674766540527,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 24,
+      "timestamp": 0.96,
+      "candidates": [
+        {
+          "x": 0.46226728723404253,
+          "y": 0.3925088652482269,
+          "score": 0.7189413905143738,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 25,
+      "timestamp": 1.0,
+      "candidates": [
+        {
+          "x": 0.4681803385416667,
+          "y": 0.4045138888888889,
+          "score": 0.7137634754180908,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 26,
+      "timestamp": 1.04,
+      "candidates": [
+        {
+          "x": 0.4756266276041667,
+          "y": 0.4205005787037037,
+          "score": 0.7270945906639099,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 27,
+      "timestamp": 1.08,
+      "candidates": [
+        {
+          "x": 0.48193359375,
+          "y": 0.4375,
+          "score": 0.7249994874000549,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 28,
+      "timestamp": 1.12,
+      "candidates": [
+        {
+          "x": 0.48891900510204084,
+          "y": 0.4563492063492063,
+          "score": 0.7027010917663574,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 29,
+      "timestamp": 1.16,
+      "candidates": [
+        {
+          "x": 0.4888039172535211,
+          "y": 0.46540003912363065,
+          "score": 0.2509273588657379,
+          "area": 142,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 30,
+      "timestamp": 1.2,
+      "candidates": [
+        {
+          "x": 0.48509919241573035,
+          "y": 0.46361969413233456,
+          "score": 0.2656497061252594,
+          "area": 178,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 31,
+      "timestamp": 1.24,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 32,
+      "timestamp": 1.28,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 33,
+      "timestamp": 1.32,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 34,
+      "timestamp": 1.36,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 35,
+      "timestamp": 1.4000000000000001,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 36,
+      "timestamp": 1.44,
+      "candidates": [
+        {
+          "x": 0.52390625,
+          "y": 0.41055555555555556,
+          "score": 0.7193809747695923,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 37,
+      "timestamp": 1.48,
+      "candidates": [
+        {
+          "x": 0.5171568627450981,
+          "y": 0.3877995642701525,
+          "score": 0.7359161972999573,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 38,
+      "timestamp": 1.52,
+      "candidates": [
+        {
+          "x": 0.5109375,
+          "y": 0.3729166666666667,
+          "score": 0.7361898422241211,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 39,
+      "timestamp": 1.56,
+      "candidates": [
+        {
+          "x": 0.5049402573529411,
+          "y": 0.36260893246187365,
+          "score": 0.7281883358955383,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 40,
+      "timestamp": 1.6,
+      "candidates": [
+        {
+          "x": 0.4993872549019608,
+          "y": 0.3568899782135076,
+          "score": 0.7296215295791626,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 41,
+      "timestamp": 1.6400000000000001,
+      "candidates": [
+        {
+          "x": 0.4954427083333333,
+          "y": 0.3402777777777778,
+          "score": 0.655718207359314,
+          "area": 42,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 42,
+      "timestamp": 1.68,
+      "candidates": [
+        {
+          "x": 0.4867215602517986,
+          "y": 0.3114383493205436,
+          "score": 0.449689656496048,
+          "area": 278,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 43,
+      "timestamp": 1.72,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 44,
+      "timestamp": 1.76,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 45,
+      "timestamp": 1.8,
+      "candidates": [
+        {
+          "x": 0.5004212622549019,
+          "y": 0.300994008714597,
+          "score": 0.7220943570137024,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 46,
+      "timestamp": 1.84,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 47,
+      "timestamp": 1.8800000000000003,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 48,
+      "timestamp": 1.92,
+      "candidates": [
+        {
+          "x": 0.5202414772727273,
+          "y": 0.3713699494949495,
+          "score": 0.6863734126091003,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 49,
+      "timestamp": 1.96,
+      "candidates": [
+        {
+          "x": 0.52609375,
+          "y": 0.4010416666666667,
+          "score": 0.7081231474876404,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 50,
+      "timestamp": 2.0,
+      "candidates": [
+        {
+          "x": 0.5308287377450981,
+          "y": 0.4364106753812636,
+          "score": 0.7105574011802673,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 51,
+      "timestamp": 2.04,
+      "candidates": [
+        {
+          "x": 0.5340711805555556,
+          "y": 0.475462962962963,
+          "score": 0.6848973631858826,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 52,
+      "timestamp": 2.08,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 53,
+      "timestamp": 2.12,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 54,
+      "timestamp": 2.16,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 55,
+      "timestamp": 2.2,
+      "candidates": [
+        {
+          "x": 0.5401870265151515,
+          "y": 0.43949915824915825,
+          "score": 0.6240689158439636,
+          "area": 33,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 56,
+      "timestamp": 2.24,
+      "candidates": [
+        {
+          "x": 0.5353156887755102,
+          "y": 0.4088718820861678,
+          "score": 0.7291869521141052,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 57,
+      "timestamp": 2.2800000000000002,
+      "candidates": [
+        {
+          "x": 0.5315688775510204,
+          "y": 0.38272392290249435,
+          "score": 0.7380929589271545,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 58,
+      "timestamp": 2.32,
+      "candidates": [
+        {
+          "x": 0.5281862745098039,
+          "y": 0.3662173202614379,
+          "score": 0.7295066714286804,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 59,
+      "timestamp": 2.36,
+      "candidates": [
+        {
+          "x": 0.5263671875,
+          "y": 0.3559027777777778,
+          "score": 0.7237038016319275,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 60,
+      "timestamp": 2.4,
+      "candidates": [
+        {
+          "x": 0.5234375,
+          "y": 0.32669082125603865,
+          "score": 0.7236624360084534,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 61,
+      "timestamp": 2.44,
+      "candidates": [
+        {
+          "x": 0.5201439950980392,
+          "y": 0.2889433551198257,
+          "score": 0.7127756476402283,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 62,
+      "timestamp": 2.48,
+      "candidates": [
+        {
+          "x": 0.5189185049019608,
+          "y": 0.25272331154684097,
+          "score": 0.717743456363678,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 63,
+      "timestamp": 2.52,
+      "candidates": [
+        {
+          "x": 0.517578125,
+          "y": 0.22946859903381642,
+          "score": 0.7068097591400146,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 64,
+      "timestamp": 2.56,
+      "candidates": [
+        {
+          "x": 0.5164331896551724,
+          "y": 0.22473659003831414,
+          "score": 0.5864713191986084,
+          "area": 29,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 65,
+      "timestamp": 2.6,
+      "candidates": [
+        {
+          "x": 0.5091528799019608,
+          "y": 0.24925108932461873,
+          "score": 0.7195397615432739,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 66,
+      "timestamp": 2.64,
+      "candidates": [
+        {
+          "x": 0.5024294969512195,
+          "y": 0.28125,
+          "score": 0.6312271952629089,
+          "area": 41,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 67,
+      "timestamp": 2.68,
+      "candidates": [
+        {
+          "x": 0.4936679271941489,
+          "y": 0.3296948877068558,
+          "score": 0.4356425702571869,
+          "area": 376,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 68,
+      "timestamp": 2.72,
+      "candidates": [
+        {
+          "x": 0.49070142663043476,
+          "y": 0.3605072463768116,
+          "score": 0.6799216270446777,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 69,
+      "timestamp": 2.7600000000000007,
+      "candidates": [
+        {
+          "x": 0.484375,
+          "y": 0.41002415458937197,
+          "score": 0.692594051361084,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 70,
+      "timestamp": 2.8000000000000003,
+      "candidates": [
+        {
+          "x": 0.4765625,
+          "y": 0.4583333333333333,
+          "score": 0.6888765096664429,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 71,
+      "timestamp": 2.84,
+      "candidates": [
+        {
+          "x": 0.469921875,
+          "y": 0.47777777777777775,
+          "score": 0.7182863354682922,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 72,
+      "timestamp": 2.88,
+      "candidates": [
+        {
+          "x": 0.4630568484042553,
+          "y": 0.4927600472813239,
+          "score": 0.7242279648780823,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 73,
+      "timestamp": 2.92,
+      "candidates": [
+        {
+          "x": 0.455859375,
+          "y": 0.5125,
+          "score": 0.7184299230575562,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 74,
+      "timestamp": 2.96,
+      "candidates": [
+        {
+          "x": 0.44921875,
+          "y": 0.5378925120772947,
+          "score": 0.7194901704788208,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 75,
+      "timestamp": 3.0,
+      "candidates": [
+        {
+          "x": 0.44318953804347827,
+          "y": 0.5493659420289855,
+          "score": 0.5581790804862976,
+          "area": 23,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 76,
+      "timestamp": 3.04,
+      "candidates": [
+        {
+          "x": 0.4446207682291667,
+          "y": 0.49182581018518523,
+          "score": 0.6981983780860901,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 77,
+      "timestamp": 3.08,
+      "candidates": [
+        {
+          "x": 0.44419642857142855,
+          "y": 0.4433106575963719,
+          "score": 0.7099645733833313,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 78,
+      "timestamp": 3.12,
+      "candidates": [
+        {
+          "x": 0.44331781914893614,
+          "y": 0.4126034278959811,
+          "score": 0.7228913307189941,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 79,
+      "timestamp": 3.16,
+      "candidates": [
+        {
+          "x": 0.44140625,
+          "y": 0.3880208333333333,
+          "score": 0.7293052673339844,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 80,
+      "timestamp": 3.2,
+      "candidates": [
+        {
+          "x": 0.4404296875,
+          "y": 0.3732638888888889,
+          "score": 0.7203033566474915,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 81,
+      "timestamp": 3.24,
+      "candidates": [
+        {
+          "x": 0.4389748086734694,
+          "y": 0.36139455782312924,
+          "score": 0.7170760631561279,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 82,
+      "timestamp": 3.2800000000000002,
+      "candidates": [
+        {
+          "x": 0.43510298295454547,
+          "y": 0.3055555555555556,
+          "score": 0.6831732988357544,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 83,
+      "timestamp": 3.3200000000000003,
+      "candidates": [
+        {
+          "x": 0.43359375,
+          "y": 0.2725694444444444,
+          "score": 0.7093141078948975,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 84,
+      "timestamp": 3.36,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 85,
+      "timestamp": 3.4,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 86,
+      "timestamp": 3.44,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 87,
+      "timestamp": 3.48,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 88,
+      "timestamp": 3.52,
+      "candidates": [
+        {
+          "x": 0.5173132944915254,
+          "y": 0.3701741996233522,
+          "score": 0.23729854822158813,
+          "area": 118,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 89,
+      "timestamp": 3.56,
+      "candidates": [
+        {
+          "x": 0.5341796875,
+          "y": 0.4079861111111111,
+          "score": 0.690180778503418,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 90,
+      "timestamp": 3.6,
+      "candidates": [
+        {
+          "x": 0.5522054036458334,
+          "y": 0.4490740740740741,
+          "score": 0.6918951272964478,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 91,
+      "timestamp": 3.64,
+      "candidates": [
+        {
+          "x": 0.571875,
+          "y": 0.4794270833333333,
+          "score": 0.6566451787948608,
+          "area": 40,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 92,
+      "timestamp": 3.68,
+      "candidates": [
+        {
+          "x": 0.5887276785714286,
+          "y": 0.48030045351473927,
+          "score": 0.7037184238433838,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 93,
+      "timestamp": 3.72,
+      "candidates": [
+        {
+          "x": 0.60859375,
+          "y": 0.48750000000000004,
+          "score": 0.7013559341430664,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 94,
+      "timestamp": 3.7600000000000007,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 95,
+      "timestamp": 3.8000000000000003,
+      "candidates": [
+        {
+          "x": 0.5895043772163121,
+          "y": 0.4309865051221434,
+          "score": 0.4870532751083374,
+          "area": 282,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 96,
+      "timestamp": 3.84,
+      "candidates": [
+        {
+          "x": 0.5682347074468085,
+          "y": 0.4012263593380615,
+          "score": 0.7006787061691284,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 97,
+      "timestamp": 3.88,
+      "candidates": [
+        {
+          "x": 0.54765625,
+          "y": 0.3770833333333333,
+          "score": 0.70305335521698,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 98,
+      "timestamp": 3.92,
+      "candidates": [
+        {
+          "x": 0.529296875,
+          "y": 0.3611111111111111,
+          "score": 0.7119598984718323,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 99,
+      "timestamp": 3.96,
+      "candidates": [
+        {
+          "x": 0.5098586309523809,
+          "y": 0.3524305555555556,
+          "score": 0.6527177095413208,
+          "area": 42,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 100,
+      "timestamp": 4.0,
+      "candidates": [
+        {
+          "x": 0.4932725694444444,
+          "y": 0.3474537037037037,
+          "score": 0.7018312215805054,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 101,
+      "timestamp": 4.04,
+      "candidates": [
+        {
+          "x": 0.4797119140625,
+          "y": 0.3280815972222222,
+          "score": 0.35558202862739563,
+          "area": 240,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 102,
+      "timestamp": 4.08,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 103,
+      "timestamp": 4.12,
+      "candidates": [
+        {
+          "x": 0.454296875,
+          "y": 0.25821208112874783,
+          "score": 0.468484103679657,
+          "area": 315,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 104,
+      "timestamp": 4.16,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 105,
+      "timestamp": 4.2,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 106,
+      "timestamp": 4.24,
+      "candidates": [
+        {
+          "x": 0.46562014751552794,
+          "y": 0.3460144927536232,
+          "score": 0.2764799892902374,
+          "area": 161,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 107,
+      "timestamp": 4.28,
+      "candidates": [
+        {
+          "x": 0.47078623670212766,
+          "y": 0.38046690307328607,
+          "score": 0.7095882296562195,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 108,
+      "timestamp": 4.32,
+      "candidates": [
+        {
+          "x": 0.47443953804347827,
+          "y": 0.4236111111111111,
+          "score": 0.703381359577179,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 109,
+      "timestamp": 4.36,
+      "candidates": [
+        {
+          "x": 0.47787786989795916,
+          "y": 0.4672619047619048,
+          "score": 0.6836988925933838,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 110,
+      "timestamp": 4.4,
+      "candidates": [
+        {
+          "x": 0.4802139945652174,
+          "y": 0.4947916666666667,
+          "score": 0.6994099617004395,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 111,
+      "timestamp": 4.44,
+      "candidates": [
+        {
+          "x": 0.48325892857142855,
+          "y": 0.5046060090702948,
+          "score": 0.7052823305130005,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 112,
+      "timestamp": 4.48,
+      "candidates": [
+        {
+          "x": 0.4853515625,
+          "y": 0.5173611111111112,
+          "score": 0.6859397888183594,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 113,
+      "timestamp": 4.520000000000001,
+      "candidates": [
+        {
+          "x": 0.48687318313953487,
+          "y": 0.5379521963824289,
+          "score": 0.6710512638092041,
+          "area": 43,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 114,
+      "timestamp": 4.5600000000000005,
+      "candidates": [
+        {
+          "x": 0.48745659722222223,
+          "y": 0.5606481481481481,
+          "score": 0.6560503244400024,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 115,
+      "timestamp": 4.6000000000000005,
+      "candidates": [
+        {
+          "x": 0.49493243243243246,
+          "y": 0.5098536036036037,
+          "score": 0.611571192741394,
+          "area": 37,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 116,
+      "timestamp": 4.64,
+      "candidates": [
+        {
+          "x": 0.501953125,
+          "y": 0.46844806763285024,
+          "score": 0.705855131149292,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 117,
+      "timestamp": 4.68,
+      "candidates": [
+        {
+          "x": 0.5106081495098039,
+          "y": 0.4287173202614379,
+          "score": 0.7091374397277832,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 118,
+      "timestamp": 4.72,
+      "candidates": [
+        {
+          "x": 0.517578125,
+          "y": 0.40247584541062803,
+          "score": 0.7282417416572571,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 119,
+      "timestamp": 4.76,
+      "candidates": [
+        {
+          "x": 0.5246484375,
+          "y": 0.3845138888888889,
+          "score": 0.7239969372749329,
+          "area": 50,
+          "threshold": 0.5
+        },
+        {
+          "x": 0.586204138225256,
+          "y": 0.5896496966249526,
+          "score": 0.4771139621734619,
+          "area": 293,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 120,
+      "timestamp": 4.8,
+      "candidates": [
+        {
+          "x": 0.5316712622549019,
+          "y": 0.3760893246187364,
+          "score": 0.7394450306892395,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 121,
+      "timestamp": 4.84,
+      "candidates": [
+        {
+          "x": 0.5379774305555556,
+          "y": 0.37476851851851856,
+          "score": 0.7019375562667847,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 122,
+      "timestamp": 4.88,
+      "candidates": [
+        {
+          "x": 0.5444779829545454,
+          "y": 0.3541666666666667,
+          "score": 0.7005878686904907,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 123,
+      "timestamp": 4.92,
+      "candidates": [
+        {
+          "x": 0.5512025122549019,
+          "y": 0.3079384531590414,
+          "score": 0.7104163765907288,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 124,
+      "timestamp": 4.96,
+      "candidates": [
+        {
+          "x": 0.5579810049019608,
+          "y": 0.2750544662309368,
+          "score": 0.7155541181564331,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 125,
+      "timestamp": 5.0,
+      "candidates": [
+        {
+          "x": 0.5641637731481481,
+          "y": 0.2482638888888889,
+          "score": 0.720047116279602,
+          "area": 54,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 126,
+      "timestamp": 5.04,
+      "candidates": [
+        {
+          "x": 0.57109375,
+          "y": 0.22777777777777775,
+          "score": 0.6973426938056946,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 127,
+      "timestamp": 5.08,
+      "candidates": [
+        {
+          "x": 0.56640625,
+          "y": 0.22916666666666666,
+          "score": 0.6807355284690857,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 128,
+      "timestamp": 5.12,
+      "candidates": [
+        {
+          "x": 0.5461154513888888,
+          "y": 0.26176697530864196,
+          "score": 0.7004016041755676,
+          "area": 54,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 129,
+      "timestamp": 5.16,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 130,
+      "timestamp": 5.2,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 131,
+      "timestamp": 5.24,
+      "candidates": [
+        {
+          "x": 0.4836685505319149,
+          "y": 0.3847517730496454,
+          "score": 0.6664677858352661,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 132,
+      "timestamp": 5.28,
+      "candidates": [
+        {
+          "x": 0.46089594414893614,
+          "y": 0.4346187943262411,
+          "score": 0.6994637250900269,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 133,
+      "timestamp": 5.32,
+      "candidates": [
+        {
+          "x": 0.43763950892857145,
+          "y": 0.4897486772486772,
+          "score": 0.6466349959373474,
+          "area": 42,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 134,
+      "timestamp": 5.36,
+      "candidates": [
+        {
+          "x": 0.4131804435483871,
+          "y": 0.5188172043010753,
+          "score": 0.5953429937362671,
+          "area": 31,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 135,
+      "timestamp": 5.4,
+      "candidates": [
+        {
+          "x": 0.3910079656862745,
+          "y": 0.5258033769063181,
+          "score": 0.7017198204994202,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 136,
+      "timestamp": 5.44,
+      "candidates": [
+        {
+          "x": 0.3669327445652174,
+          "y": 0.5399305555555556,
+          "score": 0.6718950867652893,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 137,
+      "timestamp": 5.48,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 138,
+      "timestamp": 5.520000000000001,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 139,
+      "timestamp": 5.5600000000000005,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 140,
+      "timestamp": 5.6000000000000005,
+      "candidates": [
+        {
+          "x": 0.45493861607142855,
+          "y": 0.4125330687830688,
+          "score": 0.6496874094009399,
+          "area": 42,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 141,
+      "timestamp": 5.64,
+      "candidates": [
+        {
+          "x": 0.4829915364583333,
+          "y": 0.3940972222222222,
+          "score": 0.7040519118309021,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 142,
+      "timestamp": 5.68,
+      "candidates": [
+        {
+          "x": 0.5052517361111111,
+          "y": 0.38881172839506173,
+          "score": 0.7002289295196533,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 143,
+      "timestamp": 5.72,
+      "candidates": [
+        {
+          "x": 0.5258689413265306,
+          "y": 0.357922335600907,
+          "score": 0.7078278064727783,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 144,
+      "timestamp": 5.76,
+      "candidates": [
+        {
+          "x": 0.5458029042119565,
+          "y": 0.30870697463768115,
+          "score": 0.49813881516456604,
+          "area": 368,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 145,
+      "timestamp": 5.8,
+      "candidates": [
+        {
+          "x": 0.5698642418032787,
+          "y": 0.27464708561020035,
+          "score": 0.19298288226127625,
+          "area": 61,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 146,
+      "timestamp": 5.84,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 147,
+      "timestamp": 5.88,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 148,
+      "timestamp": 5.92,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 149,
+      "timestamp": 5.96,
+      "candidates": [
+        {
+          "x": 0.5961495535714286,
+          "y": 0.23759920634920637,
+          "score": 0.6139647960662842,
+          "area": 35,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 150,
+      "timestamp": 6.0,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 151,
+      "timestamp": 6.04,
+      "candidates": [
+        {
+          "x": 0.5621632543103449,
+          "y": 0.3007662835249042,
+          "score": 0.37591394782066345,
+          "area": 232,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 152,
+      "timestamp": 6.08,
+      "candidates": [
+        {
+          "x": 0.5486979166666667,
+          "y": 0.33526234567901236,
+          "score": 0.6663486957550049,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 153,
+      "timestamp": 6.12,
+      "candidates": [
+        {
+          "x": 0.5345552884615384,
+          "y": 0.37893963675213677,
+          "score": 0.7109736800193787,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 154,
+      "timestamp": 6.16,
+      "candidates": [
+        {
+          "x": 0.5203737745098039,
+          "y": 0.42776416122004357,
+          "score": 0.7056978940963745,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 155,
+      "timestamp": 6.2,
+      "candidates": [
+        {
+          "x": 0.5070612980769231,
+          "y": 0.4800347222222222,
+          "score": 0.6964486837387085,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 156,
+      "timestamp": 6.24,
+      "candidates": [
+        {
+          "x": 0.4931640625,
+          "y": 0.5012500000000001,
+          "score": 0.729102611541748,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 157,
+      "timestamp": 6.28,
+      "candidates": [
+        {
+          "x": 0.47821180555555554,
+          "y": 0.5075617283950618,
+          "score": 0.6676421165466309,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 158,
+      "timestamp": 6.32,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 159,
+      "timestamp": 6.36,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 160,
+      "timestamp": 6.4,
+      "candidates": [
+        {
+          "x": 0.48025645380434784,
+          "y": 0.4283665458937198,
+          "score": 0.696876049041748,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 161,
+      "timestamp": 6.44,
+      "candidates": [
+        {
+          "x": 0.48479626225490197,
+          "y": 0.4073393246187364,
+          "score": 0.7228070497512817,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 162,
+      "timestamp": 6.48,
+      "candidates": [
+        {
+          "x": 0.4888446514423077,
+          "y": 0.39135950854700857,
+          "score": 0.7371992468833923,
+          "area": 52,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 163,
+      "timestamp": 6.520000000000001,
+      "candidates": [
+        {
+          "x": 0.49260876225490197,
+          "y": 0.3830337690631808,
+          "score": 0.7391394972801208,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 164,
+      "timestamp": 6.5600000000000005,
+      "candidates": [
+        {
+          "x": 0.4959741709183674,
+          "y": 0.3808815192743764,
+          "score": 0.7295648455619812,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 165,
+      "timestamp": 6.6000000000000005,
+      "candidates": [
+        {
+          "x": 0.49915747549019607,
+          "y": 0.34906045751633985,
+          "score": 0.6975484490394592,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 166,
+      "timestamp": 6.640000000000001,
+      "candidates": [
+        {
+          "x": 0.503104967948718,
+          "y": 0.3090277777777778,
+          "score": 0.6323796510696411,
+          "area": 39,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 167,
+      "timestamp": 6.68,
+      "candidates": [
+        {
+          "x": 0.5054381127450981,
+          "y": 0.27886710239651413,
+          "score": 0.7095598578453064,
+          "area": 51,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 168,
+      "timestamp": 6.72,
+      "candidates": [
+        {
+          "x": 0.5089285714285714,
+          "y": 0.2577380952380952,
+          "score": 0.6302499771118164,
+          "area": 35,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 169,
+      "timestamp": 6.76,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 170,
+      "timestamp": 6.8,
+      "candidates": [
+        {
+          "x": 0.5189453125,
+          "y": 0.28150462962962963,
+          "score": 0.304706335067749,
+          "area": 150,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 171,
+      "timestamp": 6.84,
+      "candidates": [
+        {
+          "x": 0.5249727470930232,
+          "y": 0.3058139534883721,
+          "score": 0.3267112374305725,
+          "area": 215,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 172,
+      "timestamp": 6.88,
+      "candidates": [
+        {
+          "x": 0.5296963778409091,
+          "y": 0.3515625,
+          "score": 0.6635997295379639,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 173,
+      "timestamp": 6.92,
+      "candidates": [
+        {
+          "x": 0.5334765625,
+          "y": 0.38993055555555556,
+          "score": 0.7123333811759949,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 174,
+      "timestamp": 6.96,
+      "candidates": [
+        {
+          "x": 0.5378125,
+          "y": 0.4253472222222222,
+          "score": 0.707331657409668,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 175,
+      "timestamp": 7.0,
+      "candidates": [
+        {
+          "x": 0.541015625,
+          "y": 0.4184027777777778,
+          "score": 0.6881505250930786,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 176,
+      "timestamp": 7.04,
+      "candidates": [
+        {
+          "x": 0.5462372448979592,
+          "y": 0.41121031746031744,
+          "score": 0.7208008170127869,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 177,
+      "timestamp": 7.08,
+      "candidates": [
+        {
+          "x": 0.5501330145474138,
+          "y": 0.4088541666666667,
+          "score": 0.37170442938804626,
+          "area": 232,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 178,
+      "timestamp": 7.12,
+      "candidates": [
+        {
+          "x": 0.5538100090579711,
+          "y": 0.4070299919484702,
+          "score": 0.2459222823381424,
+          "area": 138,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 179,
+      "timestamp": 7.16,
+      "candidates": [
+        {
+          "x": 0.5585521941489362,
+          "y": 0.4091312056737589,
+          "score": 0.711050808429718,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 180,
+      "timestamp": 7.2,
+      "candidates": [
+        {
+          "x": 0.5626594387755102,
+          "y": 0.41057256235827666,
+          "score": 0.7261566519737244,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 181,
+      "timestamp": 7.24,
+      "candidates": [
+        {
+          "x": 0.5656887755102041,
+          "y": 0.4034155328798186,
+          "score": 0.7059627175331116,
+          "area": 49,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 182,
+      "timestamp": 7.28,
+      "candidates": [
+        {
+          "x": 0.5703540558510638,
+          "y": 0.3998965721040189,
+          "score": 0.7195954322814941,
+          "area": 47,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 183,
+      "timestamp": 7.32,
+      "candidates": [
+        {
+          "x": 0.57421875,
+          "y": 0.3955314009661836,
+          "score": 0.7304494380950928,
+          "area": 46,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 184,
+      "timestamp": 7.36,
+      "candidates": [
+        {
+          "x": 0.5786328125,
+          "y": 0.3963888888888889,
+          "score": 0.7053741216659546,
+          "area": 50,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 185,
+      "timestamp": 7.4,
+      "candidates": [
+        {
+          "x": 0.58203125,
+          "y": 0.3958333333333333,
+          "score": 0.6863988041877747,
+          "area": 45,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 186,
+      "timestamp": 7.44,
+      "candidates": [
+        {
+          "x": 0.5856119791666666,
+          "y": 0.4034529320987654,
+          "score": 0.6149650812149048,
+          "area": 36,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 187,
+      "timestamp": 7.48,
+      "candidates": [
+        {
+          "x": 0.5880561440677966,
+          "y": 0.40640693659761457,
+          "score": 0.3067762851715088,
+          "area": 177,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 188,
+      "timestamp": 7.520000000000001,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 189,
+      "timestamp": 7.5600000000000005,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 190,
+      "timestamp": 7.6000000000000005,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 191,
+      "timestamp": 7.640000000000001,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 192,
+      "timestamp": 7.68,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 193,
+      "timestamp": 7.72,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 194,
+      "timestamp": 7.76,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 195,
+      "timestamp": 7.8,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 196,
+      "timestamp": 7.84,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 197,
+      "timestamp": 7.88,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 198,
+      "timestamp": 7.92,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 199,
+      "timestamp": 7.96,
+      "candidates": [],
+      "sceneCut": false
+    },
+    {
+      "frame": 200,
+      "timestamp": 8.0,
+      "candidates": [
+        {
+          "x": 0.7025767543859649,
+          "y": 0.747035412605588,
+          "score": 0.2940008342266083,
+          "area": 171,
+          "threshold": 0.15
+        },
+        {
+          "x": 0.6310444078947368,
+          "y": 0.4546783625730994,
+          "score": 0.23413948714733124,
+          "area": 95,
+          "threshold": 0.15
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 201,
+      "timestamp": 8.040000000000001,
+      "candidates": [
+        {
+          "x": 0.6344105113636364,
+          "y": 0.45422979797979796,
+          "score": 0.5294229388237,
+          "area": 11,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 202,
+      "timestamp": 8.08,
+      "candidates": [
+        {
+          "x": 0.63671875,
+          "y": 0.4574864498644986,
+          "score": 0.6475151777267456,
+          "area": 41,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 203,
+      "timestamp": 8.120000000000001,
+      "candidates": [
+        {
+          "x": 0.6404474431818182,
+          "y": 0.4630681818181819,
+          "score": 0.6707139015197754,
+          "area": 44,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 204,
+      "timestamp": 8.16,
+      "candidates": [
+        {
+          "x": 0.642578125,
+          "y": 0.4696180555555556,
+          "score": 0.6941208243370056,
+          "area": 48,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 205,
+      "timestamp": 8.2,
+      "candidates": [
+        {
+          "x": 0.6453488372093024,
+          "y": 0.47924741602067183,
+          "score": 0.6765309572219849,
+          "area": 43,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    },
+    {
+      "frame": 206,
+      "timestamp": 8.24,
+      "candidates": [
+        {
+          "x": 0.6485305059523809,
+          "y": 0.4913194444444444,
+          "score": 0.6481217741966248,
+          "area": 42,
+          "threshold": 0.5
+        }
+      ],
+      "sceneCut": false
+    }
+  ]
+}

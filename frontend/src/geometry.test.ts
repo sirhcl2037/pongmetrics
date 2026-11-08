@@ -3,6 +3,26 @@ import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
 import { parseSession, defaultPlayers } from './session.ts';
 import { ballTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
+import { playerTrackNames, type PlayerTracks } from './playerTracks.ts';
+
+test('saved player clicks bind names to track IDs and reject ambiguous assignments', () => {
+  const tracks: PlayerTracks = { fps:25, firstTimestamp:0, frames:new Map([[0, [
+    {trackId:7, playerId:'near-player', box:{x:0,y:.5,width:.4,height:.5}},
+    {trackId:9, playerId:'far-player', box:{x:.5,y:0,width:.4,height:.4}},
+  ]]]) };
+  const players = defaultPlayers();
+  players[0].name = 'Alex';
+  players[0].association = {timestamp:0,position:{value:{x:.6,y:.2},source:'manual'}};
+  assert.equal(playerTrackNames(tracks,players).get(9),'Alex');
+  assert.equal(playerTrackNames(tracks,players).has(7),false);
+  players[0].name = 'Sam';
+  assert.equal(playerTrackNames(tracks,players).get(9),'Sam');
+  players[1].association = players[0].association;
+  assert.equal(playerTrackNames(tracks,players).size,0);
+  players[1].association = {timestamp:0,position:{value:{x:1,y:1},source:'manual'}};
+  assert.equal(playerTrackNames(tracks,players).get(9),'Sam');
+  assert.equal(playerTrackNames({...tracks,frames:new Map()},players).size,0);
+});
 const corners = [{x:.3,y:.2},{x:.7,y:.2},{x:.9,y:.8},{x:.1,y:.8}];
 const close = (a: number,b: number) => assert.ok(Math.abs(a-b)<1e-8, `${a} != ${b}`);
 

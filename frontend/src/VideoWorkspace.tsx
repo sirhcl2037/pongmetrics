@@ -5,13 +5,15 @@ import { BallTrajectory } from './BallTrajectory';
 import { parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
 import { BallTrackingDebug } from './BallTrackingDebug';
 import { PlayerTrackOverlay } from './PlayerTrackOverlay';
-import { parsePlayerTracks, type PlayerTracks } from './playerTracks';
+import { useVideoFrameTime } from './useVideoFrameTime';
+import { clickedPlayerTrack, parsePlayerTracks, type PlayerTracks } from './playerTracks';
 
 const labels = ['1 · Near-left (origin)', '2 · Near-right (width)', '3 · Far-right', '4 · Far-left'];
 type Props = { url: string; file: File; videoRef: RefObject<HTMLVideoElement | null>; shots: Shot[]; onShots: (shots: Shot[]) => void; onTime: (time: number) => void; players: Player[]; selectedPlayerId: string; onPlayers: (players: Player[]) => void; onSelectPlayer: (id: string) => void; locatingPlayerId: string | null; onLocate: (id: string | null) => void };
 
 export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, players, selectedPlayerId, onPlayers, onSelectPlayer, locatingPlayerId, onLocate }: Props) {
   const { name, size } = file;
+  const displayedTime = useVideoFrameTime(videoRef);
   const [fps, setFps] = useState(25);
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
   const [calibration, setCalibration] = useState<Session['calibration']>(null);
@@ -171,8 +173,14 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           if (!point) return;
           video.pause();
           if (locatingPlayerId) {
-            onPlayers(players.map(p => p.id === locatingPlayerId ? { ...p, association: { timestamp: video.currentTime, position: { value: point, source: 'manual' } } } : p));
-            onLocate(null); setDraft(null); setInspect(false); setMessage('Player location saved at this timestamp.');
+            if (!playerTracks) { setMessage('Player tracking is still loading. Try again when the boxes appear.'); return; }
+            const match = clickedPlayerTrack(playerTracks, displayedTime, point);
+            if (!match) { setMessage('Click inside one tracking box. If boxes overlap, choose another frame.'); return; }
+            const alreadyAssigned = players.some(p => p.id !== locatingPlayerId && p.association &&
+              clickedPlayerTrack(playerTracks, p.association.timestamp, p.association.position.value)?.trackId === match.trackId);
+            if (alreadyAssigned) { setMessage('That track already belongs to the other player. Click the other box.'); return; }
+            onPlayers(players.map(p => p.id === locatingPlayerId ? { ...p, association: { timestamp: displayedTime, position: { value: point, source: 'manual' } } } : p));
+            onLocate(null); setDraft(null); setInspect(false); setMessage('Player name assigned to this track.');
           } else if (draft !== null) {
             const next = [...draft, point];
             if (next.length === 4) {
@@ -190,8 +198,9 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
             } catch (error) { setMessage((error as Error).message); }
           }
         }}>
+          {locatingPlayerId && <rect x="0" y="0" width="1" height="1" fill="transparent" pointerEvents="all" />}
           <svg x={rect.x} y={rect.y} width={rect.width} height={rect.height} viewBox="0 0 1 1" preserveAspectRatio="none">
-            {showPlayerTracks && playerTracks && <PlayerTrackOverlay videoRef={videoRef} tracks={playerTracks} />}
+            {(showPlayerTracks || locatingPlayerId !== null) && playerTracks && <PlayerTrackOverlay time={displayedTime} tracks={playerTracks} players={players} />}
             {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} />}
             {showBallDebug && <BallTrackingDebug videoRef={videoRef} frames={trackingFrames} fps={ballFps} />}
             {players.map((p,i) => p.association && Math.abs(p.association.timestamp-time) < .5/fps && <g key={p.id}><ellipse cx={p.association.position.value.x} cy={p.association.position.value.y} rx=".012" ry=".018" /><text x={p.association.position.value.x+.015} y={p.association.position.value.y} fontSize=".035">P{i+1}: {p.name}</text></g>)}
