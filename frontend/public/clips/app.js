@@ -78,6 +78,7 @@ function showResult(result, expiresAt) {
   $('result-detail').textContent = `${result.container.toUpperCase()} · streams directly to your download · link expires ${new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   const file = `${apiBase}${result.fileUrl}`;
   $('download').href = `${file}&download=1`; $('download').download = result.filename;
+  $('download').target = '_blank'; $('download').rel = 'noopener';
   $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 async function follow(job) {
@@ -167,6 +168,7 @@ function watchTransfer(id) {
   transferPoll = setInterval(async () => {
     try {
       const job = await api(`/api/jobs/${id}`);
+      if (job.result?.warning) notice(job.result.warning);
       if (job.transfer === 'error') { notice(job.error); $('result-detail').textContent = 'Download failed. Prepare the clip again to retry.'; clearInterval(transferPoll); }
       else if (job.transfer === 'complete') { $('result-detail').textContent = 'Transfer complete. Check your browser downloads.'; clearInterval(transferPoll); }
       else if (job.transfer === 'streaming') $('result-detail').textContent = `Streaming your clip · ${Math.round(job.progress)}% processed. Your browser shows the download.`;
