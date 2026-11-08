@@ -1,3 +1,5 @@
+// @ts-ignore: local build plugin is JavaScript.
+import clipsBuild from './clips-build-plugin.mjs';
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { localPlayerTracking } from './localPlayerTracking.ts'
@@ -21,5 +23,5 @@ const buildInfo = { commit, dirty: status === null ? null : status.length > 0, b
 // https://vite.dev/config/
 export default defineConfig({
   define: { __BUILD_INFO__: JSON.stringify(buildInfo) },
-  plugins: [react(), localPlayerTracking()],
+  plugins: [clipsBuild(), react(), localPlayerTracking()],
 })

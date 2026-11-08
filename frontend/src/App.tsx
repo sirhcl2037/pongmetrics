@@ -99,6 +99,7 @@ function App() {
       <header className="topbar">
         <a className="brand" href="./" aria-label="PongMetrics home"><span className="brand-mark" aria-hidden="true">p·</span>Pong<span className="brand-light">Metrics</span></a>
         <span className="workspace-label">MATCH WORKSPACE</span>
+        <a className="clips-tool-link" href="/clips/">Trim YouTube video ↗</a>
         <span className="session-badge"><i /> Local session</span>
       </header>
       <main>
