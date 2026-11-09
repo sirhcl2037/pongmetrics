@@ -1,4 +1,4 @@
-"""Offline person detection + ByteTrack. Boxes and IDs, not pose or named identity."""
+"""Offline person/pose detection + ByteTrack; optional 2D COCO landmarks."""
 import argparse
 import hashlib
 import json
@@ -10,6 +10,23 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
+KEYPOINT_NAMES = ['nose', 'left-eye', 'right-eye', 'left-ear', 'right-ear',
+                  'left-shoulder', 'right-shoulder', 'left-elbow', 'right-elbow',
+                  'left-wrist', 'right-wrist', 'left-hip', 'right-hip',
+                  'left-knee', 'right-knee', 'left-ankle', 'right-ankle']
+BONES = [(5,6),(5,7),(7,9),(6,8),(8,10),(5,11),(6,12),(11,12),(11,13),(13,15),(12,14),(14,16)]
+
+
+def normalized_landmarks(points, width, height):
+    """Keep unavailable/out-of-image joints null rather than pinning them to an edge."""
+    if len(points) != 17:
+        raise ValueError('Expected 17 COCO keypoints')
+    result = []
+    for name, (x, y, score) in zip(KEYPOINT_NAMES, points):
+        valid = np.isfinite([x, y, score]).all() and 0 <= score <= 1 and 0 <= x <= width and 0 <= y <= height and not (x == 0 and y == 0)
+        result.append({'name': name, 'position': {'value': {'x':float(x/width), 'y':float(y/height)},
+                       'source':'automatic', 'confidence':float(score)} if valid else None})
+    return result
 os.environ.setdefault('YOLO_CONFIG_DIR', str(ROOT/'output'/'yolo-settings'))
 os.environ.setdefault('YOLO_AUTOINSTALL', 'false')
 
@@ -54,7 +71,8 @@ class PersonTracker:
         boxes = result.boxes
         if boxes is not None and boxes.id is not None:
             height, width = frame.shape[:2]
-            for box, confidence, track_id in zip(boxes.xyxy.cpu().numpy(), boxes.conf.cpu().numpy(), boxes.id.cpu().numpy()):
+            keypoints = result.keypoints.data.cpu().numpy() if result.keypoints is not None else None
+            for index, (box, confidence, track_id) in enumerate(zip(boxes.xyxy.cpu().numpy(), boxes.conf.cpu().numpy(), boxes.id.cpu().numpy())):
                 x0,y0,x1,y1 = np.clip(box/[width,height,width,height],0,1)
                 cx, cy = float((x0+x1)/2), float((y0+y1)/2)
                 rx0,ry0,rx1,ry1 = self.roi
@@ -64,6 +82,8 @@ class PersonTracker:
                     'box':{'x':float(x0),'y':float(y0),'width':float(x1-x0),'height':float(y1-y0)},
                     'center':{'x':cx,'y':cy},
                     'groundProxy':{'x':cx,'y':float(y1)}})
+                if keypoints is not None:
+                    people[-1]['landmarks'] = normalized_landmarks(keypoints[index], width, height)
         # Bind only an unambiguous first pair. These labels describe their initial
         # screen positions; a new ByteTrack ID is never silently assigned a name.
         if not self.identities and len(people) == 2:
@@ -78,7 +98,8 @@ class PersonTracker:
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('video', type=Path)
-    p.add_argument('--weights', type=Path, default=ROOT/'output'/'models'/'yolo11n.pt')
+    p.add_argument('--weights', type=Path)
+    p.add_argument('--pose', action='store_true', help='Use YOLO11n-pose with 17 image-space body landmarks')
     p.add_argument('--imgsz', type=int, default=416)
     p.add_argument('--stride', type=int, default=1, help='Detect on every Nth source frame, starting with the first frame in the segment')
     p.add_argument('--confidence', type=float, default=.1, help='Low threshold retains ByteTrack rescue detections')
@@ -90,6 +111,8 @@ def main():
     p.add_argument('--review-video', type=Path, help='Optional annotated MP4; never repeats inference')
     p.add_argument('--no-review-sheet', action='store_true', help='Skip the sampled contact sheet')
     a = p.parse_args()
+    if a.weights is None:
+        a.weights = ROOT/'output'/'models'/('yolo11n-pose.pt' if a.pose else 'yolo11n.pt')
     if a.stride < 1:
         p.error('--stride must be at least 1')
     if not 0 <= a.start < a.end or a.imgsz < 64 or a.imgsz%32 or not 0 < a.confidence <= 1:
@@ -97,9 +120,11 @@ def main():
     if not (0 <= a.roi[0] < a.roi[2] <= 1 and 0 <= a.roi[1] < a.roi[3] <= 1):
         p.error('Invalid ROI')
     if not a.weights.is_file():
-        p.error('Weights missing; download yolo11n.pt to --weights first (see README).')
+        p.error(f'Weights missing: {a.weights}. See PLAYERS.md for setup.')
     began = time.perf_counter()
     tracker = PersonTracker(a.weights,a.imgsz,a.confidence,a.roi,a.tracker)
+    if a.pose and tracker.model.task != 'pose':
+        p.error('--pose requires pose weights')
     startup = time.perf_counter()-began
     cap = cv2.VideoCapture(str(a.video))
     if not cap.isOpened():
@@ -111,12 +136,14 @@ def main():
              'height':int(cap.get(4)),'duration':cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps}
     rows, tiles, writer = [], [], None
     segment_frames = 0
+    decoded_end = 0.
     processing = 0.
     try:
         while True:
             ok, frame = cap.read()
             if not ok: break
             timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)/1000
+            decoded_end = timestamp + 1/fps
             if timestamp < a.start: continue
             if timestamp >= a.end: break
             sample = segment_frames % a.stride == 0
@@ -136,6 +163,19 @@ def main():
                     x,y,w,h = round(box['x']*960),round(box['y']*540),round(box['width']*960),round(box['height']*540)
                     cv2.rectangle(preview,(x,y),(x+w,y+h),color,2)
                     cv2.putText(preview,f"{person['playerId'] or 'unassigned'} #{person['trackId']}",(x,max(20,y-7)),cv2.FONT_HERSHEY_SIMPLEX,.5,color,1)
+                    joints = person.get('landmarks', [])
+                    def joint(index):
+                        p = joints[index]['position']
+                        return (round(p['value']['x']*960),round(p['value']['y']*540)) if p and p['confidence'] >= .35 else None
+                    if joints:
+                        for first, second in BONES:
+                            p0, p1 = joint(first), joint(second)
+                            if p0 is not None and p1 is not None:
+                                cv2.line(preview,p0,p1,color,2)
+                        for index in range(17):
+                            point = joint(index)
+                            if point is not None:
+                                cv2.circle(preview,point,3,color,-1)
                 cv2.putText(preview,f'{timestamp:.2f}s',(10,25),cv2.FONT_HERSHEY_SIMPLEX,.7,(0,255,255),2)
                 if make_tile: tiles.append(preview)
                 if a.review_video:
@@ -149,6 +189,8 @@ def main():
         if writer is not None: writer.release()
     if not rows:
         raise RuntimeError('No video frames were decoded in the requested interval')
+    if a.end == float('inf'):
+        video['duration'] = decoded_end
     counts = {name:sum(any(p['playerId']==name for p in r['people']) for r in rows) for name in ['near-player','far-player']}
     summary = {'frames':len(rows),'framesWithBothPlayers':sum(not r['needsReview'] for r in rows),
                'sourceFrames':segment_frames,'stride':a.stride,

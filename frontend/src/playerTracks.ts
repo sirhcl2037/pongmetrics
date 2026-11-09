@@ -1,10 +1,13 @@
-import type { Player, Session } from './session';
+import type { Observation, Player, Session } from './session';
 import type { Point } from './geometry';
 
-type PlayerBox = {
+export const landmarkNames = ['nose','left-eye','right-eye','left-ear','right-ear','left-shoulder','right-shoulder','left-elbow','right-elbow','left-wrist','right-wrist','left-hip','right-hip','left-knee','right-knee','left-ankle','right-ankle'] as const;
+export type BodyLandmark = { name: typeof landmarkNames[number]; position: Observation<Point> | null };
+export type PlayerBox = {
   trackId: number;
   playerId: 'near-player' | 'far-player' | null;
   box: { x: number; y: number; width: number; height: number };
+  landmarks?: BodyLandmark[];
 };
 
 export function clickedPlayerTrack(tracks: PlayerTracks, timestamp: number, point: Point): PlayerBox | null {
@@ -15,6 +18,7 @@ export function clickedPlayerTrack(tracks: PlayerTracks, timestamp: number, poin
 }
 
 export type PlayerTracks = {
+  json?: string;
   fps: number;
   firstTimestamp: number;
   frames: Map<number, PlayerBox[]>;
@@ -53,9 +57,10 @@ export function parsePlayerTracks(text: string, video: Session['video']): Player
     throw new Error('Invalid player track FPS or frames.');
   }
   const frames = new Map<number, PlayerBox[]>();
+  const duration = /\.mkv$/i.test(video.name) && Number.isFinite(data.video.duration) ? Math.max(video.duration,data.video.duration) : video.duration;
   let firstTimestamp = Infinity;
   for (const row of data.frames) {
-    if (!Number.isFinite(row?.timestamp) || row.timestamp < 0 || row.timestamp > video.duration || !Array.isArray(row.people)) {
+    if (!Number.isFinite(row?.timestamp) || row.timestamp < 0 || row.timestamp > duration || !Array.isArray(row.people)) {
       throw new Error('Invalid player track frame.');
     }
     const frame = Math.round(row.timestamp * fps);
@@ -71,9 +76,17 @@ export function parsePlayerTracks(text: string, video: Session['video']): Player
         throw new Error('Invalid player box or identity.');
       }
       ids.add(person.trackId);
+      if (person.landmarks !== undefined && (!Array.isArray(person.landmarks) || person.landmarks.length !== 17 ||
+          person.landmarks.some((joint: BodyLandmark, index: number) => {
+            if (!joint || joint.name !== landmarkNames[index]) return true;
+            const p = joint.position;
+            return p !== null && (!p || p.source !== 'automatic' || !p.value ||
+              ![p.value.x,p.value.y,p.confidence].every(Number.isFinite) || p.value.x < 0 || p.value.x > 1 ||
+              p.value.y < 0 || p.value.y > 1 || p.confidence === undefined || p.confidence < 0 || p.confidence > 1);
+          }))) throw new Error('Invalid body landmarks.');
     }
     frames.set(frame, row.people);
     firstTimestamp = Math.min(firstTimestamp, row.timestamp);
   }
-  return { fps, firstTimestamp, frames };
+  return { fps, firstTimestamp, frames, json:text };
 }

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
 import { parseSession, defaultPlayers } from './session.ts';
 import { ballTrail, recentBallTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
-import { playerTrackNames, type PlayerTracks } from './playerTracks.ts';
+import { landmarkNames, parsePlayerTracks, playerTrackNames, type PlayerTracks } from './playerTracks.ts';
+import { detectShotCandidates, playerAxisEvidence } from './shotDetection.ts';
 import { parseReviewDraft } from './reviewDraft.ts';
 
 test('MKV detections can extend an incorrect header duration while matching the same source', () => {
@@ -96,6 +97,67 @@ test('trail duration is half a second at both 25 and 50 FPS', () => {
     assert.equal(segments[0].at(-1)?.timestamp,1);
     assert.equal(segments[0].length,Math.floor(fps*.5)+1);
   }
+});
+
+test('pose imports preserve landmark scores, missing joints, and identity; reject malformed data', () => {
+  const video={name:'pose.mp4',size:100,width:1280,height:720,duration:2};
+  const landmarks=landmarkNames.map(name => ({name,position:name === 'nose' ? null : {value:{x:.5,y:.3},source:'automatic',confidence:.8}}));
+  const person={trackId:8,playerId:'near-player',box:{x:.2,y:.1,width:.6,height:.8},landmarks};
+  const data={format:'pongmetrics-player-tracks',version:1,coordinateSystem:'normalized-video-image',video,fps:25,frames:[{timestamp:0,people:[person]}]};
+  const parsed=parsePlayerTracks(JSON.stringify(data),video);
+  assert.deepEqual(parsed.frames.get(0)?.[0].landmarks,landmarks);
+  assert.equal(parsed.frames.get(1),undefined);
+  assert.equal(parsePlayerTracks(parsed.json!,video).frames.get(0)?.[0].trackId,8);
+  for (const invalid of [landmarks.slice(1),landmarks.map((j,i) => i===1?{...j,name:'wrong'}:j),landmarks.map(j => ({...j,position:{value:{x:2,y:.3},source:'automatic',confidence:.8}}))]) {
+    assert.throws(() => parsePlayerTracks(JSON.stringify({...data,frames:[{timestamp:0,people:[{...person,landmarks:invalid}]}]}),video));
+  }
+  assert.throws(() => parsePlayerTracks(JSON.stringify(data),{...video,size:101}));
+});
+
+test('shot candidates require actual ball reversals; gaps, weak samples and straight flight are excluded', () => {
+  const make = (ys:number[]) => ys.map((y,i) => ({timestamp:i/25,position:{value:{x:.5,y},source:'automatic' as const,confidence:.9}}));
+  const reversing=make([.5,.4,.3,.4,.5]);
+  const candidates=detectShotCandidates(reversing,25,.5);
+  assert.equal(candidates.length,1);
+  assert.equal(candidates[0].timestamp,.08);
+  assert.equal(candidates[0].trackId,null);
+  assert.equal(candidates[0].evidence,'ball-reversal'); // Can be a bounce, requires review.
+  assert.equal(detectShotCandidates(make([.5,.4,.3,.2,.1]),25,.5).length,0);
+  assert.equal(detectShotCandidates(reversing.map(o => ({...o,position:{...o.position,value:{x:o.position.value.y,y:.5}}})),25,.5).length,1);
+  assert.equal(detectShotCandidates(make([.5,.5,.5,.5,.5]),25,.5).length,0);
+  assert.equal(detectShotCandidates(reversing.map((o,i) => i===2?{...o,position:{...o.position,confidence:.1}}:o),25,.5).length,0);
+  assert.equal(detectShotCandidates(reversing.map((o,i) => ({...o,timestamp:o.timestamp+(i>=2?.5:0)})),25,.5).length,0);
+  const landmarks=landmarkNames.map(name => ({name,position:name==='left-wrist'?{value:{x:.5,y:.3},source:'automatic' as const,confidence:.9}:null}));
+  const person={trackId:7,playerId:'far-player' as const,box:{x:.4,y:.2,width:.2,height:.2},landmarks};
+  const tracks:PlayerTracks={fps:25,firstTimestamp:0,frames:new Map([[2,[person]]])};
+  assert.equal(detectShotCandidates(reversing,25,.5,tracks)[0].evidence,'wrist-proximity');
+  assert.equal(detectShotCandidates(reversing,25,.5,tracks)[0].trackId,7);
+  assert.equal(detectShotCandidates(reversing,25,.5,tracks,new Set([99]))[0].trackId,null);
+  assert.equal(detectShotCandidates(reversing,25,.5,{...tracks,frames:new Map([[1,[person]]])})[0].trackId,null);
+  assert.equal(detectShotCandidates(reversing,25,.5,{...tracks,frames:new Map([[2,[person,{...person,trackId:8}]]])})[0].trackId,null);
+});
+
+test('player axis favors longitudinal reversals over cross-axis bounces in different views', () => {
+  const person=(trackId:number,x:number,y:number) => ({trackId,playerId:null,box:{x,y,width:.1,height:.1}});
+  const pair=[person(1,.2,.4),person(2,.7,.4)];
+  const hit=playerAxisEvidence(pair,[30,0],[-30,0])!;
+  const bounce=playerAxisEvidence(pair,[0,30],[0,-30])!;
+  assert.ok(hit.reverses && hit.alignment>.99);
+  assert.equal(bounce.reverses,false);
+  assert.equal(bounce.alignment,0);
+  const vertical=[person(1,.4,.2),person(2,.4,.7)];
+  assert.ok(playerAxisEvidence(vertical,[0,30],[0,-30])!.reverses);
+  const diagonal=[person(1,.2,.2),person(2,.7,.7)];
+  assert.ok(playerAxisEvidence(diagonal,[64,36],[-64,-36])!.alignment>.99);
+  assert.equal(playerAxisEvidence([...pair,person(3,.5,.1)],[30,0],[-30,0]),null);
+  assert.equal(playerAxisEvidence([pair[0]],[30,0],[-30,0]),null);
+  assert.equal(playerAxisEvidence([pair[0],{...pair[0],trackId:2}],[30,0],[-30,0]),null);
+  const observations=[.3,.4,.5,.4,.3].map((x,i) => ({timestamp:i/25,position:{value:{x,y:.45},source:'automatic' as const,confidence:.9}}));
+  const tracks:PlayerTracks={fps:25,firstTimestamp:0,frames:new Map([[2,pair]])};
+  const candidate=detectShotCandidates(observations,25,.5,tracks)[0];
+  assert.ok(candidate.contactScore !== null && candidate.contactScore>=.79);
+  assert.ok(candidate.playerAxis?.reverses);
+  assert.equal(detectShotCandidates(observations,25,.5,{...tracks,frames:new Map([[1,pair]])})[0].playerAxis,null);
 });
 
 test('perspective corners map to table meters and back', () => {

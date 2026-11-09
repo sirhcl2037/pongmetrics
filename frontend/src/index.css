@@ -12,6 +12,10 @@
 .calibration-overlay .ball-trajectory polyline { stroke: #ffe875; stroke-width: 2; }
 .calibration-overlay .ball-trajectory ellipse { fill: #ffe875; stroke: #111; stroke-width: 1.5; }
 .calibration-overlay .ball-trajectory .ball-trail-point { stroke-width: .5; }
+.shot-suggestions { margin-top: 16px; padding-top: 12px; border-top: 1px solid #44343c; }
+.shot-candidate-list { max-height: 240px; overflow-y: auto; padding-left: 22px; }
+.shot-candidate-list li { margin: 8px 0; }
+.shot-candidate-list li span { margin: 0 10px; font-size: 12px; color: #bdabb3; }
 .player-setup { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #44343c; }
 .player-setup h3 { font-size: 13px; }
 .player-setup p { color: #bdabb3; font-size: 11px; line-height: 1.5; margin: 8px 0; }

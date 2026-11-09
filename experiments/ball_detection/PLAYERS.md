@@ -1,5 +1,7 @@
 # Player tracking
 
+For optional 17-joint body landmarks, UI controls, and ball-based shot candidates, see [BODY_AND_SHOTS.md](BODY_AND_SHOTS.md).
+
 Offline YOLO11n person detector + ByteTrack. `PersonTracker` in `player_track.py` is reusable in another Python pipeline. Settings and weights can be swapped independently. The browser can display saved tracks for the matching source video.
 
 ## Setup
@@ -22,7 +24,7 @@ experiments/ball_detection/.venv/Scripts/python.exe experiments/ball_detection/p
 
 Outputs: `output/players.json` (every processed frame), `output/players.jpg` (sampled contact sheet), and the optional silent review video. JSON includes video metadata, weight SHA-256, package version, detector/tracker settings, and timings. `CachedPlayerTracks(path, video=source_path).at(timestamp)` reuses saved tracks without loading the detector; absent frames return `None`. Reuse these observations for ball-tracking experiments instead of repeating neural detection.
 
-The local Vite app (`npm run dev` or `npm run preview` in `frontend`) generates player tracks automatically after a video loads. It uses the Python environment and weights from the setup above. The app accepts one analysis job at a time for videos up to 1 GB. It processes the full upload on this computer and displays the resulting boxes when analysis finishes. Longer clips can take significantly longer than the short rally benchmark. For fixed-camera tracking, upload a continuous shot.
+The local Vite app (`npm run dev` or `npm run preview` in `frontend`) generates player tracks when you click Generate player tracks. It uses the Python environment and weights from the setup above. The app accepts one analysis job at a time for videos up to 1 GB. It processes the full upload on this computer and displays the resulting boxes when analysis finishes. Longer clips can take significantly longer than the short rally benchmark. For fixed-camera tracking, upload a continuous shot.
 
 **Import player tracks** also accepts an existing `output/players.json` for the matching source video. **Jump to player tracks** seeks to the start of the tracked segment.
 

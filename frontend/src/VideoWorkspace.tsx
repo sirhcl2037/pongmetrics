@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { homography, imageRect, normalizePoint, TABLE, transform, validateCorners, type Point } from './geometry';
 import { parseSession, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
+import { ShotSuggestions } from './ShotSuggestions';
 import { ballTrail, parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
 import { parseReviewDraft, reviewDraftKey } from './reviewDraft';
 import { BallTrackingDebug } from './BallTrackingDebug';
@@ -56,6 +57,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const playerTrackRef = useRef<HTMLInputElement>(null);
   const [playerTracks, setPlayerTracks] = useState<PlayerTracks | null>(null);
   const [showPlayerTracks, setShowPlayerTracks] = useState(true);
+  const [showLandmarks, setShowLandmarks] = useState(true);
+  const [trackingMode, setTrackingMode] = useState<'players'|'pose'>('players');
   const [trackingStatus, setTrackingStatus] = useState('');
   const [trackingFailed, setTrackingFailed] = useState(false);
   const [trackingAttempt, setTrackingAttempt] = useState(0);
@@ -64,10 +67,10 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     if (!metadata || !localTracking || trackingAttempt === 0) return;
     const controller = new AbortController();
     async function generateTracks(video: Session['video']) {
-      setTrackingStatus('Tracking players… You can annotate while this runs.');
+      setTrackingStatus(trackingMode === 'pose' ? 'Tracking body landmarks… You can annotate while this runs.' : 'Tracking players… You can annotate while this runs.');
       setTrackingFailed(false);
       try {
-        const response = await fetch('/api/player-tracks', {
+        const response = await fetch(trackingMode === 'pose' ? '/api/body-landmarks' : '/api/player-tracks', {
           method: 'POST', headers: { 'Content-Type': 'application/octet-stream' },
           body: file, signal: controller.signal,
         });
@@ -83,7 +86,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         const tracks = parsePlayerTracks(JSON.stringify(data), video);
         if (controller.signal.aborted) return;
         setPlayerTracks(tracks);
-        setTrackingStatus(`Player tracks ready for ${tracks.frames.size} frames.`);
+        setShowPlayerTracks(true);
+        setTrackingStatus(`${trackingMode === 'pose' ? 'Body landmarks' : 'Player tracks'} ready for ${tracks.frames.size} frames.`);
       } catch (error) {
         if (controller.signal.aborted) return;
         setTrackingStatus(error instanceof Error ? error.message : 'Player tracking failed.');
@@ -92,7 +96,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     }
     void generateTracks(metadata);
     return () => controller.abort();
-  }, [file, metadata, localTracking, trackingAttempt]);
+  }, [file, metadata, localTracking, trackingAttempt, trackingMode]);
   const [ballFps,setBallFps] = useState(savedReview?.ballFps ?? 25);
   const proposal = ballTrail(ballObservations, displayedTime, ballFps, 0).at(-1)?.position ?? null;
   useEffect(() => {
@@ -299,7 +303,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
               {proposal && !currentLabel && <g className="ball-trajectory"><ellipse cx={proposal.value.x} cy={proposal.value.y} rx=".007" ry=".012" /><title>Detector proposal — awaiting your review</title></g>}
               {currentLabel?.position && <ellipse cx={currentLabel.position.value.x} cy={currentLabel.position.value.y} rx=".006" ry=".01" />}
             </> : <>
-            {(showPlayerTracks || locatingPlayerId !== null) && playerTracks && <PlayerTrackOverlay time={displayedTime} tracks={playerTracks} players={players} />}
+            {(showPlayerTracks || locatingPlayerId !== null) && playerTracks && <PlayerTrackOverlay time={displayedTime} tracks={playerTracks} players={players} showLandmarks={showLandmarks} />}
             {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} showTrail={showBallTrail} />}
             {showBallDebug && <BallTrackingDebug videoRef={videoRef} frames={trackingFrames} fps={ballFps} />}
             {players.map((p,i) => p.association && Math.abs(p.association.timestamp-time) < .5/fps && <g key={p.id}><ellipse cx={p.association.position.value.x} cy={p.association.position.value.y} rx=".012" ry=".018" /><text x={p.association.position.value.x+.015} y={p.association.position.value.y} fontSize=".035">P{i+1}: {p.name}</text></g>)}
@@ -328,7 +332,15 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       <div className="workspace-tools">
         <button disabled={!metadata} onClick={() => playerTrackRef.current?.click()}>Import player tracks</button>
         <label><input type="checkbox" checked={showPlayerTracks} onChange={e => setShowPlayerTracks(e.target.checked)} /> Player overlay</label>
-        {localTracking && !playerTracks && !trackingFailed && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking players')} onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Generate player tracks</button>}
+        <label><input type="checkbox" checked={showLandmarks} onChange={e => setShowLandmarks(e.target.checked)} /> Body landmarks</label>
+        {localTracking && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking')} onClick={() => {setTrackingMode('pose');setTrackingAttempt(attempt => attempt + 1);}}>Generate body landmarks</button>}
+        {localTracking && !playerTracks && !trackingFailed && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking')} onClick={() => {setTrackingMode('players');setTrackingAttempt(attempt => attempt + 1);}}>Generate player tracks</button>}
+        {trackingStatus.startsWith('Tracking') && <button onClick={() => {setTrackingAttempt(0);setTrackingStatus('Player analysis canceled.');}}>Cancel player analysis</button>}
+        {playerTracks?.json && <button onClick={() => {
+          const href=URL.createObjectURL(new Blob([playerTracks.json!],{type:'application/json'}));
+          const link=document.createElement('a');link.href=href;link.download=`${name}.player-tracks.json`;link.click();
+          setTimeout(() => URL.revokeObjectURL(href),1000);
+        }}>Export player tracks & landmarks</button>}
         {trackingFailed && <button onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Retry player tracking</button>}
         {playerTracks && <button onClick={() => {
           const video = videoRef.current;
@@ -336,6 +348,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         }}>Jump to player tracks</button>}
       </div>
       {trackingStatus && <p role="status">{trackingStatus}</p>}
+      <p>Body landmarks are estimated 2D joints. Hidden or low-score joints stay hidden; blurred or occluded joints can still be misplaced at high scores. Export them separately with player tracks; import through Import player tracks.</p>
+      <ShotSuggestions observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
       <input ref={playerTrackRef} className="visually-hidden" type="file" aria-label="Player tracks file" accept=".json,application/json" onChange={async e => {
         const file = e.target.files?.[0];
         e.target.value = '';
