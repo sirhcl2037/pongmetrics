@@ -21,7 +21,9 @@ def evaluate(detections, labels, offset):
     off_grid = 0
     unprocessed = 0
     failures = []
+    reference_failures = []
     errors = []
+    reference_errors = []
     seen = set()
     width, height = labels['video']['width'], labels['video']['height']
     for row in labels['labels']:
@@ -45,23 +47,39 @@ def evaluate(detections, labels, offset):
             if prediction is None:
                 missing += 1
                 failures.append(dict(frame=frame, reason='missing'))
+                reference_failures.append(dict(frame=frame, reason='missing'))
             else:
                 target = row['position']['value']
                 errors.append(math.hypot((prediction['x'] - target['x']) * width,
                                          (prediction['y'] - target['y']) * height))
+                reference_errors.append(math.hypot((prediction['x'] - target['x']) * 1280,
+                                                   (prediction['y'] - target['y']) * 720))
                 if errors[-1] > 20:
                     failures.append(dict(frame=frame, reason='wrong-location', pixels=errors[-1]))
+                if reference_errors[-1] > 20:
+                    reference_failures.append(dict(frame=frame, reason='outside-center-tolerance', referencePixels=reference_errors[-1]))
         elif status in ('occluded', 'out-of-frame'):
             negatives += 1
             false_positives += prediction is not None
+            if prediction is not None:
+                failures.append(dict(frame=frame, reason='false-positive'))
+                reference_failures.append(dict(frame=frame, reason='false-positive'))
         else:
             raise ValueError(f'Unknown visibility {status}')
+    correct = sum(error <= 20 for error in reference_errors)
+    incorrect = len(reference_errors)-correct+false_positives
     return dict(predictionFrameOffset=offset, visibleFrames=visible, missingDetections=missing,
+                proposalCoverage=len(errors)/visible if visible else None,
                 withinPixels={str(t): sum(error <= t for error in errors) for t in (5, 10, 20)},
                 medianErrorPixels=statistics.median(errors) if errors else None,
                 negativeFrames=negatives, negativeFalsePositives=false_positives,
                 uncertainFramesExcluded=uncertain, offGridLabelsExcluded=off_grid,
-                unprocessedLabelsExcluded=unprocessed, failures=failures)
+                unprocessedLabelsExcluded=unprocessed, failures=failures,
+                referenceResolution=[1280,720],
+                withinReferencePixels={str(t):sum(error <= t for error in reference_errors) for t in (5,10,20,30)},
+                referencePrecision=correct/(correct+incorrect) if correct+incorrect else None,
+                referenceRecall=correct/visible if visible else None,
+                referenceFailures=reference_failures)
 
 
 def main():
@@ -80,7 +98,8 @@ def main():
         alignmentDiagnostics=[evaluate(detections, labels, shift) for shift in range(-2, 3)],
         note='Offsets are diagnostics, not corrected ground truth. Confirm alignment visually before tuning. '
              'Missing predictions include footage the detector did not process. '
-             'Pixel errors use original video resolution.',
+             'Pixel errors use original video resolution; reference metrics scale positions to 1280x720 for cross-resolution comparison. '
+             'Accepted detector-assisted positions are review-approved, not independent manual center measurements.',
         runtime=detections.get('summary', {}).get('sourceRun', {}))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding='utf-8')

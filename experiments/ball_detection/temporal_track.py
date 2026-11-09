@@ -14,8 +14,14 @@ def xy(candidate):
 
 
 class BallTracker:
-    def __init__(self, fps):
+    def __init__(self, fps, strong_score=.5, acquisition_score=None):
+        if not 0 < strong_score <= 1:
+            raise ValueError('Association score must be between zero and one')
         self.fps = fps
+        self.strong_score = strong_score
+        self.acquisition_score = strong_score if acquisition_score is None else acquisition_score
+        if not strong_score <= self.acquisition_score <= 1:
+            raise ValueError('New tracks require at least the association confidence')
         self.position = None
         self.velocity = np.zeros(2)  # Pixels per second, not per decoded frame.
         self.last_time = None
@@ -55,7 +61,7 @@ class BallTracker:
             row.update(prediction=dict(x=float(prediction[0]/512), y=float(prediction[1]/288)),
                        uncertaintyRadiusPixels=radius, kind='occluded')
         self.rows.append(row)
-        strong = [c for c in candidates if c['score'] >= .5]
+        strong = [c for c in candidates if c['score'] >= self.strong_score]
         selected = None
         if guidance is not None:
             ranked = sorted([(np.linalg.norm(xy(c)-prediction)/radius-.2*c['score'], c)
@@ -68,7 +74,8 @@ class BallTracker:
         else:
             # Global search is available on every frame. Never let an old crop
             # or old velocity prevent reacquisition. Require a short tracklet.
-            unique = strong[0] if len(strong) == 1 else None
+            acquisition = [c for c in strong if c['score'] >= self.acquisition_score]
+            unique = acquisition[0] if len(acquisition) == 1 else None
             pending = self.pending
             if unique is not None and pending is not None:
                 old, old_row = pending
@@ -113,7 +120,7 @@ class BallTracker:
             if i == 0 or i+1 >= len(self.rows):
                 continue
             weak, a, b = self.rows[i-1:i+2]
-            if weak['position'] is not None or a['confidence'] < .5 or b['confidence'] < .5 or b['trackId'] != a['trackId']:
+            if weak['position'] is not None or a['confidence'] < self.strong_score or b['confidence'] < self.strong_score or b['trackId'] != a['trackId']:
                 continue
             if a['sceneCut'] or b['sceneCut'] or b['timestamp']-weak['timestamp'] > 2.1/self.fps:
                 continue
@@ -193,7 +200,7 @@ def replay(cache):
     began = time.perf_counter()
     if cache.get('format') != 'pongmetrics-neural-candidates' or not 0 < cache['fps'] <= 240:
         raise ValueError('Unsupported candidate cache')
-    tracker = BallTracker(cache['fps'])
+    tracker = BallTracker(cache['fps'], cache.get('model', {}).get('strongScore', .5), cache.get('model', {}).get('acquisitionScore'))
     previous_frame = -1
     for row in cache['frames']:
         if not isinstance(row['frame'], int) or row['frame'] <= previous_frame:
@@ -215,6 +222,13 @@ def main():
     source.add_argument('--candidates', type=Path, help='Replay raw candidates without neural inference')
     source.add_argument('--video', type=Path, help='Run streaming TrackNet on a local video')
     p.add_argument('--end', type=float, default=float('inf'))
+    p.add_argument('--start', type=float, default=0)
+    p.add_argument('--native-zoom', action='store_true', help='Experimental original-image quarter-area crops resized to 512x288')
+    model = p.add_mutually_exclusive_group()
+    model.add_argument('--head-adapter', type=Path, help='Explicit checkpoint-bound adapter; otherwise use the validated local default when present')
+    model.add_argument('--base-model', action='store_true', help='Use original pretrained weights and original tracking defaults')
+    p.add_argument('--strong-score', type=float, help='Override association cutoff for uncalibrated heatmap peaks')
+    p.add_argument('--acquisition-score', type=float, help='Confidence required to start a new track; defaults to association cutoff')
     p.add_argument('--background-samples', type=int, default=24)
     p.add_argument('--candidate-floor', type=float, default=.15)
     p.add_argument('--weak-peaks', action='store_true', help='Experimental additional local maxima; requires validation')
@@ -222,20 +236,35 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--save-candidates', type=Path)
     a = p.parse_args()
-    if a.end <= 0 or a.background_samples < 0 or not 0 < a.candidate_floor < .5:
+    if a.start < 0 or a.end <= a.start or a.background_samples < 0 or not 0 < a.candidate_floor < .5:
         p.error('Invalid end or sample count')
     if a.candidates:
+        if a.head_adapter or a.base_model:
+            p.error('Cached evidence already belongs to a model; model selection requires --video')
         cache = json.loads(a.candidates.read_text(encoding='utf8'))
+        if a.strong_score is not None:
+            cache.setdefault('model', {})['strongScore'] = a.strong_score
+        if a.acquisition_score is not None:
+            cache.setdefault('model', {})['acquisitionScore'] = a.acquisition_score
         payload = replay(cache)
     else:
         from neural_candidates import StreamingDetector
         began = time.perf_counter()
-        detector = StreamingDetector(a.video, a.end, a.background_samples, a.candidate_floor, a.weak_peaks)
-        tracker = BallTracker(detector.fps)
+        from head_adapter import model_settings
+        try:
+            adapter, association, acquisition, adapter_name = model_settings(a.head_adapter,a.base_model,a.strong_score,a.acquisition_score)
+        except (ValueError,OSError) as error:
+            p.error(str(error))
+        if a.native_zoom and a.weak_peaks:
+            p.error('Compare native zoom independently of weak-peak recovery')
+        detector = StreamingDetector(a.video, a.end, a.background_samples, a.candidate_floor, a.weak_peaks, a.native_zoom, adapter)
+        tracker = BallTracker(detector.fps, association, acquisition)
         source_rows = []
         failures = 0
         rescue_calls = 0
         for i, timestamp, history, cut in detector.frames():
+            if timestamp < a.start:
+                continue
             guidance = None if cut else tracker.guidance(timestamp)
             center = None
             # Reacquire globally after ONE failed crop, and every half second.
@@ -244,7 +273,7 @@ def main():
                 center = np.clip(guidance[0]/SCALE, 0, 1)
             candidates = detector.detect(history, center)
             rescued = False
-            if center is not None and guidance and not any(c['score'] >= .5 for c in candidates):
+            if center is not None and guidance and not any(c['score'] >= association for c in candidates):
                 # A weak peak near the prediction can lose confidence when the
                 # crop removes context. Retry THIS frame before discarding it.
                 if any(c['score'] >= .15 and np.linalg.norm(xy(c)-guidance[0]) <= guidance[1] for c in candidates):
@@ -262,6 +291,9 @@ def main():
                      fps=detector.fps, frames=source_rows,
                      model=dict(name='RacketVision TrackNetV3', weightsSha256=detector.weights_hash,
                                 backgroundSamples=detector.background_sample_count, candidateFloor=a.candidate_floor, weakPeaks=a.weak_peaks,
+                                nativeZoom=a.native_zoom, headAdapterSha256=detector.head_adapter_hash, headAdapterName=adapter_name, strongScore=association,
+                                acquisitionScore=tracker.acquisition_score,
+                                analyzedStart=a.start, analyzedEnd=a.end if np.isfinite(a.end) else detector.end,
                                 temporalOrder='background,BGR[i-3],BGR[i-2],BGR[i-1],BGR[i]; repeat first'),
                      summary=dict(heavyCalls=detector.calls, cropCalls=detector.crop_calls,
                                   fullFrameCalls=detector.full_frame_calls, sameFrameRescueCalls=rescue_calls, startupSeconds=detector.startup_seconds,

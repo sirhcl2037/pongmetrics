@@ -112,6 +112,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   }, [file, metadata, fps, ballFps, ballLabels, ballObservations, savedReview]);
   const [threshold,setThreshold] = useState(.5);
   const [showBall,setShowBall] = useState(true);
+  const [showBallTrail, setShowBallTrail] = useState(true);
   const [trackingFrames, setTrackingFrames] = useState<TrackingFrame[]>([]);
   const [showBallDebug, setShowBallDebug] = useState(false);
   const [ballTracking, setBallTracking] = useState(false);
@@ -142,6 +143,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       if (controller.signal.aborted) return;
       setBallObservations(parsed.observations); setBallFps(parsed.fps); setTrackingFrames(diagnostics);
       setFps(parsed.fps);
+      setMetadata(previous => previous && parsed.duration > previous.duration ? { ...previous, duration:parsed.duration } : previous);
       setThreshold(.15);
       setBallStatus(`Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
     } catch (error) {
@@ -162,31 +164,59 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   }, [metadata, videoRef]);
   const corners = draft ?? calibration?.corners.map(o => o.value) ?? [];
   const inverse = calibration ? homography(TABLE, calibration.corners.map(o => o.value)) : null;
+  function updateDuration(video: HTMLVideoElement) {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    setMetadata(previous => previous && video.duration > previous.duration ? { ...previous, duration: video.duration } : previous);
+  }
   function seek(direction: number) {
     const video = videoRef.current;
     if (!video || !metadata) return;
     video.pause();
+    updateDuration(video);
+    const duration = Math.max(metadata.duration, Number.isFinite(video.duration) ? video.duration : 0);
     // Seek inside the frame interval to avoid decoder rounding at its boundary.
     const frame = Math.floor(video.currentTime * fps + 1e-6);
     const targetFrame = Math.max(0, frame + direction);
-    video.currentTime = Math.min(Math.max(0, metadata.duration - .000001), (targetFrame + .5) / fps);
+    video.currentTime = Math.min(duration, (targetFrame + .5) / fps);
     onTime(video.currentTime);
   }
   function nextUnreviewed() {
     const video = videoRef.current;
     if (!video || !metadata) return;
+    updateDuration(video);
+    const duration = Math.max(metadata.duration, Number.isFinite(video.duration) ? video.duration : 0);
     const reviewed = new Set(ballLabels.map(label => Math.round(label.timestamp * fps)));
-    const total = Math.ceil(metadata.duration * fps);
+    const total = Math.ceil(duration * fps);
     const start = Math.round(displayedTime * fps);
     for (let step = 1; step <= total; step++) {
       const frame = (start + step) % total;
       if (!reviewed.has(frame)) {
         video.pause();
-        video.currentTime = Math.min(metadata.duration-.000001, (frame+.5)/fps);
+        video.currentTime = Math.min(duration, (frame+.5)/fps);
         return;
       }
     }
-    setMessage('All frames reviewed. Export your labels.');
+    video.pause();
+    video.currentTime = duration;
+    setMessage('Known frames reviewed. Checking the video end for additional frames; use Next unreviewed again if the estimate grows.');
+  }
+  async function importBallLabels(backup: File) {
+    try {
+      if (!metadata) return;
+      const data = JSON.parse(await backup.text());
+      if (data?.format !== 'pongmetrics-ball-ground-truth' || data.version !== 1 ||
+          data.coordinateSystem !== 'normalized-video-image' || data.video?.width !== metadata.width ||
+          data.video?.height !== metadata.height) throw new Error('Load the matching video before importing labels.');
+      const restored = parseReviewDraft(JSON.stringify({ version:1, video:data.video, fps:data.fps, ballFps,
+        labels:data.labels, observations:[], time:0 }), file);
+      // Keep newer decisions already in this tab when a backup contains the same timestamp.
+      setBallLabels(previous => [...new Map([...restored.labels, ...previous].map(label => [label.timestamp, label])).values()].sort((a,b) => a.timestamp-b.timestamp));
+      setFps(restored.fps);
+      setMetadata(previous => previous ? { ...previous, duration:Math.max(previous.duration, restored.video.duration) } : previous);
+      const video = videoRef.current;
+      if (video && restored.labels.length) { video.pause(); video.currentTime = Math.max(...restored.labels.map(label => label.timestamp)); }
+      setMessage(`Restored ${restored.labels.length} labels. Existing decisions in this tab were preserved.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not import labels.'); }
   }
   function startCalibration() {
     videoRef.current?.pause();
@@ -227,7 +257,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           if (savedReview) v.currentTime = Math.min(savedReview.time, Math.max(0, v.duration-.000001));
           const update = () => { const r = imageRect(v.clientWidth, v.clientHeight, v.videoWidth, v.videoHeight); setRect({x:r.x/v.clientWidth,y:r.y/v.clientHeight,width:r.width/v.clientWidth,height:r.height/v.clientHeight}); };
           update();
-        }} onError={() => setMessage('Video cannot be played. Try a compatible MP4 file.')} />
+        }} onDurationChange={event => updateDuration(event.currentTarget)} onError={() => setMessage('Video cannot be played. Try a compatible MP4 file.')} />
         <svg className={`calibration-overlay ${labeling || draft !== null || inspect || locatingPlayerId ? 'interactive' : ''}`} viewBox="0 0 1 1" preserveAspectRatio="none" aria-label="Table calibration overlay" onPointerDown={e => {
           const video = videoRef.current;
           if (!video || !metadata || (!labeling && draft === null && !inspect && !locatingPlayerId)) return;
@@ -270,7 +300,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
               {currentLabel?.position && <ellipse cx={currentLabel.position.value.x} cy={currentLabel.position.value.y} rx=".006" ry=".01" />}
             </> : <>
             {(showPlayerTracks || locatingPlayerId !== null) && playerTracks && <PlayerTrackOverlay time={displayedTime} tracks={playerTracks} players={players} />}
-            {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} />}
+            {showBall && <BallTrajectory videoRef={videoRef} observations={ballObservations} fps={ballFps} threshold={threshold} showTrail={showBallTrail} />}
             {showBallDebug && <BallTrackingDebug videoRef={videoRef} frames={trackingFrames} fps={ballFps} />}
             {players.map((p,i) => p.association && Math.abs(p.association.timestamp-time) < .5/fps && <g key={p.id}><ellipse cx={p.association.position.value.x} cy={p.association.position.value.y} rx=".012" ry=".018" /><text x={p.association.position.value.x+.015} y={p.association.position.value.y} fontSize=".035">P{i+1}: {p.name}</text></g>)}
             {corners.length > 1 && <polyline points={corners.map(p => `${p.x},${p.y}`).join(' ')+(corners.length === 4 ? ` ${corners[0].x},${corners[0].y}` : '')} />}
@@ -286,15 +316,15 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek}
       proposal={proposal} onAccept={() => { if (proposal) saveBallLabel('visible', proposal.value, true); }}
       onNextUnreviewed={nextUnreviewed} autoAdvance={autoAdvance} onAutoAdvance={setAutoAdvance}
-      onGenerate={localTracking ? () => void generateBallTracks() : null} generating={ballTracking} status={[ballStatus, message].filter(Boolean).join(' ')} storageStatus={storageStatus} />
+      onGenerate={localTracking ? () => void generateBallTracks() : null} generating={ballTracking} status={[ballStatus, message].filter(Boolean).join(' ')} storageStatus={storageStatus} onImport={backup => void importBallLabels(backup)} />
     <div className="calibration-controls">
-      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
+      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label><input type="checkbox" checked={showBallTrail} disabled={!showBall} onChange={e => setShowBallTrail(e.target.checked)} /> Detection trail</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
-        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setBallObservations(data.observations); setBallFps(data.fps); setFps(data.fps); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
+        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setBallObservations(data.observations); setBallFps(data.fps); setFps(data.fps); setMetadata(previous => previous && data.duration > previous.duration ? { ...previous, duration:data.duration } : previous); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
       }} />
-      <p>{ballObservations.length} ball observations. Overlay follows decoded video frames; no interpolation across missing frames. Export JSON also saves these observations.</p>
+      <p>{ballObservations.length} ball observations. The fading trail shows the past half second of detected positions, with breaks at missing or low-score frames. Export JSON also saves these observations.</p>
       <div className="workspace-tools">
         <button disabled={!metadata} onClick={() => playerTrackRef.current?.click()}>Import player tracks</button>
         <label><input type="checkbox" checked={showPlayerTracks} onChange={e => setShowPlayerTracks(e.target.checked)} /> Player overlay</label>

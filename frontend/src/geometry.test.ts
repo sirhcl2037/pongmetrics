@@ -2,9 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
 import { parseSession, defaultPlayers } from './session.ts';
-import { ballTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
+import { ballTrail, recentBallTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
 import { playerTrackNames, type PlayerTracks } from './playerTracks.ts';
 import { parseReviewDraft } from './reviewDraft.ts';
+
+test('MKV detections can extend an incorrect header duration while matching the same source', () => {
+  const video = {name:'clip.mkv',size:100,width:3840,height:2160,duration:11};
+  const data = {format:'pongmetrics-ball-detections',version:1,coordinateSystem:'normalized-video-image',
+    video:{...video,duration:15.28},fps:50,ballObservations:[{timestamp:15.26,
+      position:{value:{x:.4,y:.5},source:'automatic',confidence:.8}}]};
+  assert.equal(parseDetections(JSON.stringify(data),video).duration,15.28);
+  assert.throws(() => parseDetections(JSON.stringify(data),{...video,size:101}));
+  assert.throws(() => parseDetections(JSON.stringify({...data,video:{...data.video,name:'clip.mp4'}}),{...video,name:'clip.mp4'}));
+});
 
 test('review drafts preserve human decisions and proposals and reject a different clip', () => {
   const video = {name:'review.mp4',size:100,width:1280,height:720,duration:9};
@@ -65,6 +75,29 @@ test('ball trail drops missing frames and uncertain detections without interpola
   assert.throws(()=>parseDetections(JSON.stringify(payload),{...video,size:101}));
   assert.throws(()=>parseDetections(JSON.stringify({...payload,ballObservations:[observations[0],observations[0]]}),video));
 });
+test('visible trail preserves gaps and score exclusions while the current ball disappears', () => {
+  const observations = [0,.04,.12,.16,.20,.24].map(timestamp => ({ timestamp,
+    position:{value:{x:timestamp,y:.3},source:'automatic' as const,confidence:timestamp === .16 ? .2 : .9} }));
+  const times = (time:number) => recentBallTrail(observations,time,25,.5).map(segment => segment.map(o => o.timestamp));
+  assert.deepEqual(times(.24), [[0,.04],[.12],[.20,.24]]);
+  assert.deepEqual(times(.08), [[0,.04]]);
+  assert.equal(ballTrail(observations,.08,25,.5).length,0);
+  assert.deepEqual(times(.04), [[0,.04]]); // Seeking back never retains future observations.
+  assert.deepEqual(times(.8), []);
+});
+
+test('trail duration is half a second at both 25 and 50 FPS', () => {
+  for (const fps of [25,50]) {
+    const observations = Array.from({length:fps*2},(_,i) => ({timestamp:i/fps,
+      position:{value:{x:.2,y:.3},source:'automatic' as const,confidence:.9}}));
+    const segments = recentBallTrail(observations,1,fps,.5);
+    assert.equal(segments.length,1);
+    assert.ok(segments[0][0].timestamp >= .5);
+    assert.equal(segments[0].at(-1)?.timestamp,1);
+    assert.equal(segments[0].length,Math.floor(fps*.5)+1);
+  }
+});
+
 test('perspective corners map to table meters and back', () => {
   validateCorners(corners);
   const h = homography(corners,TABLE), inverse = homography(TABLE,corners);

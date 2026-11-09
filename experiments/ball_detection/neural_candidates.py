@@ -56,11 +56,12 @@ def extract_weak_peaks(heatmap, offset=(0, 0), floor=.01):
 
 class StreamingDetector:
     """Four source frames and a bounded sampled background; no clip-sized array."""
-    def __init__(self, video, end=float('inf'), background_samples=24, candidate_floor=.15, weak_peaks=False):
+    def __init__(self, video, end=float('inf'), background_samples=24, candidate_floor=.15, weak_peaks=False, native_zoom=False, head_adapter=None):
         if not 0 < candidate_floor < .5:
             raise ValueError('Candidate floor must be between zero and .5')
         self.candidate_floor = candidate_floor
         self.weak_peaks = weak_peaks
+        self.native_zoom = native_zoom
         began = time.perf_counter()
         self.video_path = Path(video)
         cap = cv2.VideoCapture(str(video))
@@ -79,20 +80,50 @@ class StreamingDetector:
         last = max(0, int(np.ceil(self.end*self.fps))-1)
         indices = set(np.linspace(0, last, min(background_samples, last+1), dtype=int)) if background_samples else None
         samples = []
+        zoom_samples = []
         i = 0
+        last_timestamp = None
         while True:
             ok, frame = cap.read()
-            if not ok or cap.get(cv2.CAP_PROP_POS_MSEC)/1000 >= self.end:
+            if not ok:
                 break
-            if indices is None or i in indices:
+            timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)/1000
+            last_timestamp = timestamp
+            if timestamp < self.end and (indices is None or i in indices):
                 samples.append(cv2.resize(frame, (512, 288)))
+                if native_zoom:
+                    zoom_samples.append(cv2.resize(frame, (1024, 576)))
             i += 1
         cap.release()
+        # MKV frame-count/duration headers can underreport decodable footage.
+        if last_timestamp is not None:
+            self.video['duration'] = round(last_timestamp + 1/self.fps, 6)
+            corrected_end = min(end, self.video['duration'])
+            if abs(corrected_end - self.end) > .5/self.fps:
+                self.end = corrected_end
+                last = max(0, int(np.ceil(self.end*self.fps))-1)
+                indices = set(np.linspace(0, last, min(background_samples, last+1), dtype=int)) if background_samples else None
+                samples, zoom_samples = [], []
+                cap = cv2.VideoCapture(str(video))
+                index = 0
+                while True:
+                    ok, frame = cap.read()
+                    if not ok or cap.get(cv2.CAP_PROP_POS_MSEC)/1000 >= self.end:
+                        break
+                    if indices is None or index in indices:
+                        samples.append(cv2.resize(frame, (512, 288)))
+                        if native_zoom:
+                            zoom_samples.append(cv2.resize(frame, (1024, 576)))
+                    index += 1
+                cap.release()
         if not samples:
             raise ValueError('No background frames')
         self.background_sample_count = len(samples)
         self.background = np.median(np.stack(samples), axis=0).astype(np.float32)/255
         del samples
+        if native_zoom:
+            self.zoom_background = np.median(np.stack(zoom_samples), axis=0).astype(np.float32)/255
+            del zoom_samples
         import torch
         from detect import TrackNet
         from mmengine.logging.history_buffer import HistoryBuffer
@@ -105,6 +136,10 @@ class StreamingDetector:
         self.model = TrackNet(in_dim=15, out_dim=4, last_only=True).eval()
         self.model.load_state_dict({k.removeprefix('module.'): v for k, v in state.get('state_dict', state).items()})
         self.weights_hash = hashlib.sha256((ROOT/'balltrack_best.pth').read_bytes()).hexdigest()
+        self.head_adapter_hash = None
+        if head_adapter is not None:
+            from head_adapter import apply_head_adapter
+            self.head_adapter_hash = apply_head_adapter(self.model, head_adapter, self.weights_hash)
         self.startup_seconds = time.perf_counter()-began
         self.calls = self.crop_calls = self.full_frame_calls = 0
         self.inference_seconds = 0.
@@ -132,9 +167,10 @@ class StreamingDetector:
                 if cut:
                     history.clear()
                 previous_small = small
+                source = frame if getattr(self, 'native_zoom', False) else resized
                 if not history:
-                    history.extend([resized]*3)
-                history.append(resized)
+                    history.extend([source]*3)
+                history.append(source)
                 yield i, timestamp, list(history), cut
                 i += 1
         finally:
@@ -142,6 +178,10 @@ class StreamingDetector:
 
     def detect(self, history, center=None):
         import torch
+        if self.native_zoom:
+            if center is not None:
+                return self.detect_native_crop(history, center)
+            history = [cv2.resize(frame, (512, 288)) for frame in history]
         left, top, width, height = 0, 0, 512, 288
         if center is not None:
             width, height = 256, 144
@@ -164,6 +204,33 @@ class StreamingDetector:
             candidates = [c for c in candidates if left+4 <= c['x']*512 < left+width-4
                           and top+4 <= c['y']*288 < top+height-4]
         return candidates
+
+    def detect_native_crop(self, history, center):
+        """Crop half the source width/height, then resize to the full model input."""
+        import torch
+        source_height, source_width = history[-1].shape[:2]
+        width, height = source_width//2, source_height//2
+        left = int(np.clip(round(center[0]*source_width-width/2), 0, source_width-width))
+        top = int(np.clip(round(center[1]*source_height-height/2), 0, source_height-height))
+        crops = [cv2.resize(frame[top:top+height, left:left+width], (512, 288)).astype(np.float32)/255 for frame in history]
+        # The sampled median is retained at 2x model resolution, avoiding 24 full 4K backgrounds.
+        x0, y0 = round(left/source_width*1024), round(top/source_height*576)
+        background = self.zoom_background[y0:y0+288, x0:x0+512]
+        tensor = torch.from_numpy(np.stack([background, *crops]).transpose(0, 3, 1, 2).reshape(1, 15, 288, 512))
+        began = time.perf_counter()
+        with torch.inference_mode():
+            heatmap = self.model(frames=tensor)[0][0, 0].numpy()
+        self.inference_seconds += time.perf_counter()-began
+        self.calls += 1
+        self.crop_calls += 1
+        candidates = extract_candidates(heatmap, floor=self.candidate_floor)
+        result = []
+        for candidate in candidates:
+            if not 4/512 <= candidate['x'] < 508/512 or not 4/288 <= candidate['y'] < 284/288:
+                continue
+            result.append({**candidate, 'x':(left+candidate['x']*width)/source_width,
+                           'y':(top+candidate['y']*height)/source_height})
+        return result
 
 
 def main():

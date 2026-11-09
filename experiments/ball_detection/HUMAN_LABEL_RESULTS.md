@@ -33,8 +33,8 @@ From the repository root in PowerShell, using the existing Python environment an
 $py = 'experiments/ball_detection/.venv/Scripts/python.exe'
 $clip = 'C:/Users/liang/Downloads/Wang Chuqin vs Sora Matsushima Match Highlights #ITTFWorldCup 2026.mp4'
 $labels = "$clip.ball-labels.json"
-& $py experiments/ball_detection/temporal_track.py --video $clip --output experiments/ball_detection/output/current-control.json --save-candidates experiments/ball_detection/output/current-control-candidates.json
-& $py experiments/ball_detection/temporal_track.py --video $clip --weak-peaks --output experiments/ball_detection/output/peak-tracks.json --save-candidates experiments/ball_detection/output/peak-candidates.json
+& $py experiments/ball_detection/temporal_track.py --base-model --video $clip --output experiments/ball_detection/output/current-control.json --save-candidates experiments/ball_detection/output/current-control-candidates.json
+& $py experiments/ball_detection/temporal_track.py --base-model --video $clip --weak-peaks --output experiments/ball_detection/output/peak-tracks.json --save-candidates experiments/ball_detection/output/peak-candidates.json
 & $py experiments/ball_detection/temporal_track.py --candidates experiments/ball_detection/output/peak-candidates.json --output experiments/ball_detection/output/peak-recovered.json
 & $py experiments/ball_detection/evaluate_manual_labels.py experiments/ball_detection/output/peak-recovered.json $labels --frame-offset -1 --output experiments/ball_detection/output/human-label-evaluation.json
 & $py experiments/ball_detection/motion_recovery.py $clip experiments/ball_detection/output/current-control.json --output experiments/ball_detection/output/motion-control.json

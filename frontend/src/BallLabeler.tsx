@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Point } from './geometry';
 import type { Session } from './session';
 
@@ -11,14 +11,16 @@ export type BallLabel = {
 };
 
 export function BallLabeler({ enabled, onToggle, time, fps, video, labels, onLabel, onDelete, onStep,
-  proposal, onAccept, onNextUnreviewed, autoAdvance, onAutoAdvance, onGenerate, generating, status, storageStatus }: {
+  proposal, onAccept, onNextUnreviewed, autoAdvance, onAutoAdvance, onGenerate, generating, status, storageStatus, onImport }: {
   enabled: boolean; onToggle: () => void; time: number; fps: number;
   video: Session['video'] | null; labels: BallLabel[];
   onLabel: (visibility: BallLabel['visibility']) => void; onDelete: () => void; onStep: (direction: number) => void;
   proposal: { value: Point; confidence?: number } | null; onAccept: () => void; onNextUnreviewed: () => void;
   autoAdvance: boolean; onAutoAdvance: (value: boolean) => void;
   onGenerate: (() => void) | null; generating: boolean; status: string; storageStatus: string;
+  onImport: (file: File) => void;
 }) {
+  const importRef = useRef<HTMLInputElement>(null);
   const current = labels.find(label => Math.abs(label.timestamp - time) < .000001);
   useEffect(() => {
     if (!enabled) return;
@@ -55,10 +57,15 @@ export function BallLabeler({ enabled, onToggle, time, fps, video, labels, onLab
       <button disabled={!video} aria-pressed={enabled} onClick={onToggle}>Ball review {enabled ? 'on' : 'off'}</button>
       {onGenerate && <button disabled={!video || generating} onClick={onGenerate}>{generating ? 'Detecting… You can return later' : 'Generate review proposals'}</button>}
       <button disabled={!labels.length} onClick={download}>Export ball labels ({labels.length})</button>
+      <button disabled={!video} onClick={() => importRef.current?.click()}>Import ball labels</button>
+      <input ref={importRef} className="visually-hidden" aria-label="Ball labels backup" type="file" accept=".json,application/json" onChange={event => {
+        const file = event.target.files?.[0]; event.target.value = ''; if (file) onImport(file);
+      }} />
     </div>
     {enabled && <>
       <p>Review the yellow proposal. A accepts it; click the actual ball to correct it. O = occluded, X = out of frame, U = uncertain. ← / → steps frames; N skips to the next unreviewed frame. Keep this tab open while detection runs.</p>
       <p>{labels.length} reviewed / approximately {video ? Math.ceil(video.duration * fps) : 0} frames. {storageStatus}</p>
+      <p>The frame estimate updates if the browser discovers a longer duration while seeking.</p>
       {status && <p role="status">{status}</p>}
       <div className="workspace-tools">
         <button disabled={!proposal} onClick={onAccept}>Accept proposal (A)</button>

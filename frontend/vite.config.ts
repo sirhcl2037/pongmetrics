@@ -1,4 +1,3 @@
-// @ts-ignore: local build plugin is JavaScript.
 import clipsBuild from './clips-build-plugin.mjs';
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
