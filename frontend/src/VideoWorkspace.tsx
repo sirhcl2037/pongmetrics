@@ -3,6 +3,7 @@ import { homography, imageRect, normalizePoint, TABLE, transform, validateCorner
 import { parseSession, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
 import { ShotSuggestions } from './ShotSuggestions';
+import { ShotAnalysisReview } from './ShotAnalysisReview';
 import { ballTrail, parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
 import { parseReviewDraft, reviewDraftKey } from './reviewDraft';
 import { BallTrackingDebug } from './BallTrackingDebug';
@@ -350,6 +351,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       {trackingStatus && <p role="status">{trackingStatus}</p>}
       <p>Body landmarks are estimated 2D joints. Hidden or low-score joints stay hidden; blurred or occluded joints can still be misplaced at high scores. Export them separately with player tracks; import through Import player tracks.</p>
       <ShotSuggestions observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
+      <ShotAnalysisReview shots={shots} observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
       <input ref={playerTrackRef} className="visually-hidden" type="file" aria-label="Player tracks file" accept=".json,application/json" onChange={async e => {
         const file = e.target.files?.[0];
         e.target.value = '';

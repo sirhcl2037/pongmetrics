@@ -5,6 +5,8 @@ import { parseSession, defaultPlayers } from './session.ts';
 import { ballTrail, recentBallTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
 import { landmarkNames, parsePlayerTracks, playerTrackNames, type PlayerTracks } from './playerTracks.ts';
 import { detectShotCandidates, playerAxisEvidence } from './shotDetection.ts';
+import { analyzeReviewedShots, matchContacts } from './shotAnalysis.ts';
+import type { Shot } from './session.ts';
 import { parseReviewDraft } from './reviewDraft.ts';
 
 test('MKV detections can extend an incorrect header duration while matching the same source', () => {
@@ -158,6 +160,54 @@ test('player axis favors longitudinal reversals over cross-axis bounces in diffe
   assert.ok(candidate.contactScore !== null && candidate.contactScore>=.79);
   assert.ok(candidate.playerAxis?.reverses);
   assert.equal(detectShotCandidates(observations,25,.5,{...tracks,frames:new Map([[1,pair]])})[0].playerAxis,null);
+});
+
+test('shot-level matching is one-to-one and maximizes matches before minimizing timing error', () => {
+  const shot=(id:number,time:number):Shot=>({id,time,wing:'FH',stroke:'Other',source:'manual',playerId:'player-1'});
+  const candidates=detectShotCandidates([.5,.4,.3,.4,.5].map((y,i)=>({timestamp:i/25,position:{value:{x:.5,y},source:'automatic',confidence:.9}})),25,.5);
+  const candidate=(timestamp:number)=>({...candidates[0],timestamp});
+  // Greedy nearest matching could consume .10 for the first shot and miss .20.
+  const pairs=matchContacts([shot(1,.09),shot(2,.20)],[candidate(0),candidate(.10)],.11);
+  assert.equal(pairs.length,2);
+  assert.deepEqual(pairs.map(p=>p.candidate.timestamp),[0,.10]);
+  assert.equal(matchContacts([shot(1,.10),shot(2,.11)],[candidate(.10)]).length,1);
+  const report=analyzeReviewedShots([shot(1,1),{...shot(2,1.5),source:'automatic'}],
+    [candidate(1.05),candidate(1.06),candidate(1.5),candidate(3)],[],25,.5,null,new Map(),{start:.5,end:2});
+  assert.equal(report.referenceShots,1);
+  assert.equal(report.matchedContacts,1);
+  assert.equal(report.contactRecall,1);
+  assert.equal(report.contactPrecision,1/3);
+  assert.equal(report.details[0].movement,null);
+  assert.equal(report.details[0].ballContextAvailable,false);
+  const wrongPlayer=analyzeReviewedShots([shot(1,1)],[{...candidate(1),trackId:9}],[],25,.5,null,new Map([['player-1',7]]),{start:.5,end:2});
+  assert.equal(wrongPlayer.details[0].playerAttribution,'incorrect');
+  assert.equal(analyzeReviewedShots([shot(1,1)],[{...candidate(1),trackId:7}],[],25,.5,null,new Map([['player-1',7]]),{start:.5,end:2}).details[0].playerAttribution,'correct');
+  assert.equal(analyzeReviewedShots([shot(1,1)], [candidate(.95)],[],25,.5,null,new Map(),{start:1,end:2}).matchedContacts,1);
+});
+
+test('shot evidence abstains on missing or unassigned people and keeps movement separate from ball coverage', () => {
+  const shot:Shot={id:1,time:1,wing:'BH',stroke:'Other',source:'manual',playerId:'player-1'};
+  const observations=[.92,.96,1,1.04,1.08].map(timestamp=>({timestamp,position:{value:{x:.5,y:.3},source:'automatic' as const,confidence:.9}}));
+  const frames:PlayerTracks['frames']=new Map();
+  for(let frame=25;frame<=33;frame++) frames.set(frame,[{trackId:7,playerId:null,box:{x:.2+(frame-25)*.01,y:.4,width:.2,height:.4}}]);
+  const tracks:PlayerTracks={fps:25,firstTimestamp:1,frames};
+  const run=(people:PlayerTracks|null=tracks,ids:Map<string,number>=new Map([['player-1',7]]),fixed=true,end=2)=>
+    analyzeReviewedShots([shot],[],observations,25,.5,people,ids,{start:0,end},fixed);
+  const report=run();
+  assert.equal(report.ballContextShots,1);
+  assert.equal(report.missedContacts,1); // Missing automatic contact doesn't erase usable human-tagged evidence.
+  assert.equal(report.movementMeasuredShots,1);
+  assert.ok(Math.abs(report.details[0].movement!.bodyWidths-.4)<1e-8);
+  assert.equal(run(null).movementMeasuredShots,0);
+  assert.equal(run(tracks,new Map()).movementMeasuredShots,0);
+  assert.equal(run(tracks,undefined,false).movementMeasuredShots,0);
+  assert.equal(run(tracks,undefined,true,1.1).movementMeasuredShots,0);
+  const gappy={...tracks,frames:new Map([...frames].filter(([f])=>f<27||f>30))};
+  assert.equal(run(gappy).movementMeasuredShots,0);
+  const empty=analyzeReviewedShots([],[],[],25,.5,null,new Map(),{start:0,end:1});
+  assert.equal(empty.contactRecall,null);
+  assert.equal(empty.contactPrecision,null);
+  assert.throws(()=>analyzeReviewedShots([],[],[],25,.5,null,new Map(),{start:2,end:1}));
 });
 
 test('perspective corners map to table meters and back', () => {
