@@ -1,5 +1,6 @@
 import type { Observation, Player, Session } from './session';
 import type { Point } from './geometry';
+import { displayedFrameIndex } from './videoFrames.ts';
 
 export const landmarkNames = ['nose','left-eye','right-eye','left-ear','right-ear','left-shoulder','right-shoulder','left-elbow','right-elbow','left-wrist','right-wrist','left-hip','right-hip','left-knee','right-knee','left-ankle','right-ankle'] as const;
 export type BodyLandmark = { name: typeof landmarkNames[number]; position: Observation<Point> | null };
@@ -11,7 +12,7 @@ export type PlayerBox = {
 };
 
 export function clickedPlayerTrack(tracks: PlayerTracks, timestamp: number, point: Point): PlayerBox | null {
-  const people = tracks.frames.get(Math.round(timestamp * tracks.fps)) ?? [];
+  const people = tracks.frames.get(displayedFrameIndex(timestamp,tracks.fps)) ?? [];
   const matches = people.filter(({ box }) => point.x >= box.x && point.x <= box.x + box.width &&
     point.y >= box.y && point.y <= box.y + box.height);
   return matches.length === 1 ? matches[0] : null;

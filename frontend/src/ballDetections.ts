@@ -1,4 +1,5 @@
 import { defaultPlayers, parseSession, type BallObservation, type Session } from './session.ts';
+import { displayedFrameIndex } from './videoFrames.ts';
 
 export function parseDetections(text: string, video: Session['video']) {
   const data = JSON.parse(text);
@@ -17,14 +18,15 @@ export function parseDetections(text: string, video: Session['video']) {
 
 // A missing frame breaks the trail. Never bridge or interpolate across it.
 export function ballTrail(observations: BallObservation[], time: number, fps: number, threshold: number) {
+  const displayedFrame = displayedFrameIndex(time,fps);
   // Imports are sorted. Binary search keeps playback cheap on long recordings.
   let lo = 0, hi = observations.length;
   while (lo < hi) {
     const mid = (lo+hi) >>> 1;
-    if (observations[mid].timestamp <= time-.5/fps) lo = mid+1;
+    if (Math.round(observations[mid].timestamp*fps) < displayedFrame) lo = mid+1;
     else hi = mid;
   }
-  const frame = lo < observations.length && Math.abs(observations[lo].timestamp-time) < .5/fps && (observations[lo].position.confidence ?? 1) >= threshold ? lo : -1;
+  const frame = lo < observations.length && Math.round(observations[lo].timestamp*fps) === displayedFrame && (observations[lo].position.confidence ?? 1) >= threshold ? lo : -1;
   if (frame < 0) return [];
   const trail = [observations[frame]];
   for (let i = frame-1; i >= 0 && trail.length < 6; i--) {
@@ -47,7 +49,7 @@ export function recentBallTrail(observations: BallObservation[], time: number, f
   }
   const segments: BallObservation[][] = [];
   let segment: BallObservation[] = [];
-  for (let i = lo; i < observations.length && observations[i].timestamp < time + .5 / fps; i++) {
+  for (let i = lo; i < observations.length && Math.round(observations[i].timestamp*fps) <= displayedFrameIndex(time,fps); i++) {
     const observation = observations[i];
     if ((observation.position.confidence ?? 1) < threshold) { segment = []; continue; }
     if (!segment.length || observation.timestamp - segment[segment.length - 1].timestamp > 1.1 / fps) {

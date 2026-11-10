@@ -1,0 +1,9 @@
+# Paused overlay alignment — 2026-11-09
+
+The supplied screenshot shows the 720p clip's source frame 88 (3.52 s) with a yellow marker matching the detection for frame 89 (3.56 s). Accounting for the screenshot's enlarged, vertically cropped video, the marker maps to approximately (683.4, 291.6) source pixels. Saved detection 89 is (683.5, 293.3); detection 88 is (660.4, 265.8), on the visible ball. A downscaled image comparison across source frames 75–100 selected frame 88 as the best image match. The scale/translation was estimated from the visible video bounds and table geometry, not treated as camera calibration.
+
+The overlay previously selected the nearest detection within half a frame. Frame stepping intentionally seeks to frame midpoints, where rounding and floating-point differences can select the following observation. Player rendering/click lookup and prediction diagnostics also used nearest/rounded selection. Shared `displayedFrameIndex` now selects the containing frame interval with a small boundary epsilon. Observation timestamps are still mapped to their source frame indices. The visible trail excludes observations from future frames too.
+
+No detection coordinates, timestamps, human labels, or exported sessions are shifted. The historical -1-frame correction for old human-label exports remains an evaluation concern; it is not applied to overlays. Existing frame-index pose and shot matching algorithms are unchanged.
+
+Regression tests cover exact timestamps, midpoint seeks, slightly past midpoint, near-end-of-frame times, missing current observations, trail endpoints, and player-click association at 25 and 50 FPS. The screenshot confirms a display mismatch; the exact browser callback state was not captured. Browser confirmation after reload is still needed to establish that the corrected containing-frame lookup resolves this user's paused display.

@@ -1,10 +1,11 @@
 import { playerTrackNames, type PlayerTracks } from './playerTracks';
 import type { Player } from './session';
+import { displayedFrameIndex } from './videoFrames';
 
 const bones = [[5,6],[5,7],[7,9],[6,8],[8,10],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16]];
 
 export function PlayerTrackOverlay({ time, tracks, players, showLandmarks = true }: { time: number; tracks: PlayerTracks; players: Player[]; showLandmarks?: boolean }) {
-  const people = tracks.frames.get(Math.round(time * tracks.fps)) ?? [];
+  const people = tracks.frames.get(displayedFrameIndex(time,tracks.fps)) ?? [];
   const names = playerTrackNames(tracks, players);
   return <g className="player-track-overlay" aria-label="Player tracking overlay">
     {people.map(({ trackId, playerId, box, landmarks }) => {

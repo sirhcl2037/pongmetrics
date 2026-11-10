@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
 import { parseSession, defaultPlayers } from './session.ts';
 import { ballTrail, recentBallTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
-import { landmarkNames, parsePlayerTracks, playerTrackNames, type PlayerTracks } from './playerTracks.ts';
+import { clickedPlayerTrack, landmarkNames, parsePlayerTracks, playerTrackNames, type PlayerTracks } from './playerTracks.ts';
 import { detectShotCandidates, playerAxisEvidence } from './shotDetection.ts';
 import { analyzeReviewedShots, matchContacts } from './shotAnalysis.ts';
 import type { Shot } from './session.ts';
+import { displayedFrameIndex } from './videoFrames.ts';
 import { parseReviewDraft } from './reviewDraft.ts';
 
 test('MKV detections can extend an incorrect header duration while matching the same source', () => {
@@ -208,6 +209,22 @@ test('shot evidence abstains on missing or unassigned people and keeps movement 
   assert.equal(empty.contactRecall,null);
   assert.equal(empty.contactPrecision,null);
   assert.throws(()=>analyzeReviewedShots([],[],[],25,.5,null,new Map(),{start:2,end:1}));
+});
+
+test('midpoint frame stepping never draws the following ball or player frame', () => {
+  for(const fps of [25,50]) {
+    const observations=[88,89,90].map(frame=>({timestamp:frame/fps,position:{value:{x:frame/100,y:.3},source:'automatic' as const,confidence:.9}}));
+    for(const fraction of [0,.5,.500001,.99]) {
+      const time=(88+fraction)/fps;
+      assert.equal(displayedFrameIndex(time,fps),88);
+      assert.equal(ballTrail(observations,time,fps,.5).at(-1)?.timestamp,88/fps);
+      assert.equal(recentBallTrail(observations,time,fps,.5).flat().at(-1)?.timestamp,88/fps);
+    }
+    assert.equal(ballTrail(observations,89/fps,fps,.5).at(-1)?.timestamp,89/fps);
+    assert.equal(ballTrail(observations.slice(1),88.75/fps,fps,.5).length,0);
+  }
+  const tracks:PlayerTracks={fps:25,firstTimestamp:0,frames:new Map([[88,[{trackId:7,playerId:null,box:{x:0,y:0,width:1,height:1}}]],[89,[{trackId:9,playerId:null,box:{x:0,y:0,width:1,height:1}}]]])};
+  assert.equal(clickedPlayerTrack(tracks,3.54,{x:.5,y:.5})?.trackId,7);
 });
 
 test('perspective corners map to table meters and back', () => {
