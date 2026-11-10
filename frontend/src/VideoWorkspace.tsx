@@ -59,7 +59,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [playerTracks, setPlayerTracks] = useState<PlayerTracks | null>(null);
   const [showPlayerTracks, setShowPlayerTracks] = useState(true);
   const [showLandmarks, setShowLandmarks] = useState(true);
-  const [trackingMode, setTrackingMode] = useState<'players'|'pose'>('players');
+  const [trackingMode, setTrackingMode] = useState<'players'|'pose'|'rtmpose'>('players');
   const [trackingStatus, setTrackingStatus] = useState('');
   const [trackingFailed, setTrackingFailed] = useState(false);
   const [trackingAttempt, setTrackingAttempt] = useState(0);
@@ -68,10 +68,10 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     if (!metadata || !localTracking || trackingAttempt === 0) return;
     const controller = new AbortController();
     async function generateTracks(video: Session['video']) {
-      setTrackingStatus(trackingMode === 'pose' ? 'Tracking body landmarks… You can annotate while this runs.' : 'Tracking players… You can annotate while this runs.');
+      setTrackingStatus(trackingMode !== 'players' ? 'Tracking body landmarks… You can annotate while this runs.' : 'Tracking players… You can annotate while this runs.');
       setTrackingFailed(false);
       try {
-        const response = await fetch(trackingMode === 'pose' ? '/api/body-landmarks' : '/api/player-tracks', {
+        const response = await fetch(trackingMode === 'rtmpose' ? '/api/body-landmarks-rtm' : trackingMode === 'pose' ? '/api/body-landmarks' : '/api/player-tracks', {
           method: 'POST', headers: { 'Content-Type': 'application/octet-stream' },
           body: file, signal: controller.signal,
         });
@@ -88,7 +88,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         if (controller.signal.aborted) return;
         setPlayerTracks(tracks);
         setShowPlayerTracks(true);
-        setTrackingStatus(`${trackingMode === 'pose' ? 'Body landmarks' : 'Player tracks'} ready for ${tracks.frames.size} frames.`);
+        setTrackingStatus(`${trackingMode === 'rtmpose' ? 'RTMPose landmarks' : trackingMode === 'pose' ? 'Body landmarks' : 'Player tracks'} ready for ${tracks.frames.size} frames.`);
       } catch (error) {
         if (controller.signal.aborted) return;
         setTrackingStatus(error instanceof Error ? error.message : 'Player tracking failed.');
@@ -335,6 +335,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         <label><input type="checkbox" checked={showPlayerTracks} onChange={e => setShowPlayerTracks(e.target.checked)} /> Player overlay</label>
         <label><input type="checkbox" checked={showLandmarks} onChange={e => setShowLandmarks(e.target.checked)} /> Body landmarks</label>
         {localTracking && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking')} onClick={() => {setTrackingMode('pose');setTrackingAttempt(attempt => attempt + 1);}}>Generate body landmarks</button>}
+        {localTracking && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking')} onClick={() => {setTrackingMode('rtmpose');setTrackingAttempt(attempt => attempt + 1);}}>Generate body landmarks · RTMPose</button>}
         {localTracking && !playerTracks && !trackingFailed && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking')} onClick={() => {setTrackingMode('players');setTrackingAttempt(attempt => attempt + 1);}}>Generate player tracks</button>}
         {trackingStatus.startsWith('Tracking') && <button onClick={() => {setTrackingAttempt(0);setTrackingStatus('Player analysis canceled.');}}>Cancel player analysis</button>}
         {playerTracks?.json && <button onClick={() => {

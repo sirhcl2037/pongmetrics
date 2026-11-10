@@ -1,5 +1,7 @@
 # Player tracking
 
+Optional source-region RTMPose generation and a model comparison are documented in [RTMPOSE_COMPARISON.md](RTMPOSE_COMPARISON.md).
+
 For optional 17-joint body landmarks, UI controls, and ball-based shot candidates, see [BODY_AND_SHOTS.md](BODY_AND_SHOTS.md).
 
 Offline YOLO11n person detector + ByteTrack. `PersonTracker` in `player_track.py` is reusable in another Python pipeline. Settings and weights can be swapped independently. The browser can display saved tracks for the matching source video.
