@@ -177,7 +177,7 @@ h2 { font-size: 14px; font-weight: 600; letter-spacing: -.1px; }
   .annotation-controls { grid-template-columns: 1fr 1fr; }
   .annotation-body { padding: 20px; }.timestamp { padding: 14px; }.timestamp strong { font-size: 28px; }
   .field-heading { margin-top: 20px; }
-  .stroke-options { display: grid; grid-template-columns: repeat(5,1fr); }.stroke-option { padding: 10px 4px; }
+  .stroke-options { display: grid; grid-template-columns: repeat(6,1fr); }.stroke-option { padding: 10px 4px; }
   .wing-button { min-height: 46px; }
   .stats-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 16px 0; }.stat-card { min-height: 128px; }
   .timeline-heading { flex-wrap: wrap; padding: 16px; gap: 14px; }.panel-heading { padding-left: 18px; padding-right: 18px; }

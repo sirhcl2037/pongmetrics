@@ -250,6 +250,11 @@ test('session roundtrip preserves provenance and rejects malformed data', () => 
   assert.deepEqual(migrated.players,defaultPlayers());
   const assigned = { ...migrated, shots: [{ ...migrated.shots[0], playerId:'player-2', playerIdentity:{value:'player-2',source:'automatic',confidence:.9} }] };
   assert.deepEqual(parseSession(JSON.stringify(assigned)),assigned);
+  for(const wing of ['FH','BH'] as const) {
+    const serve={...assigned,shots:[{...assigned.shots[0],wing,stroke:'Serve'}]};
+    assert.deepEqual(parseSession(JSON.stringify(serve)),serve);
+  }
+  assert.throws(()=>parseSession(JSON.stringify({...assigned,shots:[{...assigned.shots[0],stroke:'Invalid'}]})));
   assert.throws(()=>parseSession(JSON.stringify({...assigned,selectedPlayerId:'missing'})));
   assert.throws(()=>parseSession(JSON.stringify({...assigned,shots:[{...assigned.shots[0],playerId:'missing'}]})));
   assert.throws(()=>parseSession(JSON.stringify({...s,fps:0})));

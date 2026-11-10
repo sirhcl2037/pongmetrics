@@ -1,11 +1,11 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { VideoWorkspace } from './VideoWorkspace';
-import { defaultPlayers, type Player, type Shot } from './session';
+import { defaultPlayers, strokeTypes, type Player, type Shot } from './session';
 import { PlayerSetup } from './PlayerSetup';
 
 type Wing = "FH" | "BH";
-type Stroke = "Loop" | "Drive" | "Push" | "Block" | "Other";
+type Stroke = Shot['stroke'];
 
 
 function App() {
@@ -126,10 +126,10 @@ function App() {
               <PlayerSetup players={players} selected={selectedPlayerId} onSelect={setSelectedPlayerId} onChange={setPlayers} enabled={!!videoUrl} autoSwitch={autoSwitchPlayers} onAutoSwitch={setAutoSwitchPlayers} onAssociate={id => { videoRef.current?.pause(); setLocatingPlayerId(id); }} />
               <div className="timestamp"><span className="eyebrow">CURRENT POSITION</span><strong>{timestamp(currentTime)}</strong><span>Tags are saved at this timestamp</span></div>
               <div className="field-heading"><span id="stroke-label">Stroke type</span><span>SELECT ONE</span></div>
-              <div className="stroke-options" role="group" aria-labelledby="stroke-label">{(['Loop', 'Drive', 'Push', 'Block', 'Other'] as const).map(type => <button key={type} aria-pressed={stroke === type} className={stroke === type ? 'stroke-option selected' : 'stroke-option'} onClick={() => setStroke(type)}>{type}</button>)}</div>
+              <div className="stroke-options" role="group" aria-labelledby="stroke-label">{strokeTypes.map(type => <button key={type} aria-pressed={stroke === type} className={stroke === type ? 'stroke-option selected' : 'stroke-option'} onClick={() => setStroke(type)}>{type}</button>)}</div>
               <div className="field-heading"><span>Add to timeline</span></div>
               <div className="annotation-controls"><button className="wing-button forehand" disabled={!videoUrl} onClick={() => addShot('FH')}><span className="wing-symbol">FH</span> Forehand <span aria-hidden="true">+</span></button><button className="wing-button backhand" disabled={!videoUrl} onClick={() => addShot('BH')}><span className="wing-symbol">BH</span> Backhand <span aria-hidden="true">+</span></button></div>
-              <p className="annotation-hint">{videoUrl ? 'Pause at contact, select a stroke, then tag the wing.' : 'Upload a video to start tagging shots.'}</p>
+              <p className="annotation-hint">{videoUrl ? stroke === 'Serve' ? 'Pause at racket–ball contact, select the server, then tag Forehand or Backhand.' : 'Pause at contact, select a stroke, then tag the wing.' : 'Upload a video to start tagging shots.'}</p>
             </div>
           </section>
         </div>

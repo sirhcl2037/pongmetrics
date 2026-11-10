@@ -3,7 +3,8 @@ export type Observation<T> = { value: T; source: 'manual' | 'automatic'; confide
 export type BallObservation = { timestamp: number; position: Observation<Point> };
 export type Player = { id: string; name: string; association?: { timestamp: number; position: Observation<Point> } };
 export const defaultPlayers = (): Player[] => [{ id: 'player-1', name: 'Player 1' }, { id: 'player-2', name: 'Player 2' }];
-export type Shot = { id: number; time: number; wing: 'FH' | 'BH'; stroke: 'Loop' | 'Drive' | 'Push' | 'Block' | 'Other'; source: 'manual' | 'automatic'; playerId: string | null; playerIdentity?: Observation<string> };
+export const strokeTypes = ['Serve', 'Loop', 'Drive', 'Push', 'Block', 'Other'] as const;
+export type Shot = { id: number; time: number; wing: 'FH' | 'BH'; stroke: typeof strokeTypes[number]; source: 'manual' | 'automatic'; playerId: string | null; playerIdentity?: Observation<string> };
 export type Session = {
   version: 2;
   video: { name: string; size: number; width: number; height: number; duration: number };
@@ -35,7 +36,7 @@ export function parseSession(text: string): Session {
   for (const p of s.players) if (p.association && (!finite(p.association.timestamp) || p.association.timestamp < 0 || p.association.timestamp > s.video.duration || !observation(p.association.position))) throw new Error('Invalid player association.');
   for (const shot of s.shots) {
     if (legacy && shot) shot.playerId = null;
-    if (!shot || !Number.isSafeInteger(shot.id) || shot.id < 0 || ids.has(shot.id) || !finite(shot.time) || shot.time < 0 || shot.time > s.video.duration || !['FH','BH'].includes(shot.wing) || !['Loop','Drive','Push','Block','Other'].includes(shot.stroke) || !['manual','automatic'].includes(shot.source)) throw new Error('Invalid shot data.');
+    if (!shot || !Number.isSafeInteger(shot.id) || shot.id < 0 || ids.has(shot.id) || !finite(shot.time) || shot.time < 0 || shot.time > s.video.duration || !['FH','BH'].includes(shot.wing) || !strokeTypes.includes(shot.stroke) || !['manual','automatic'].includes(shot.source)) throw new Error('Invalid shot data.');
     ids.add(shot.id);
     if (shot.playerId !== null && !s.players.some(p => p.id === shot.playerId)) throw new Error('Unknown shot player.');
     if (shot.playerIdentity && (shot.playerIdentity.value !== shot.playerId || !['manual','automatic'].includes(shot.playerIdentity.source) || (shot.playerIdentity.confidence !== undefined && (!finite(shot.playerIdentity.confidence) || shot.playerIdentity.confidence < 0 || shot.playerIdentity.confidence > 1)))) throw new Error('Invalid player identity observation.');
