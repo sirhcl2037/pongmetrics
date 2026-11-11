@@ -1,4 +1,5 @@
 import { validateCorners, type Point } from './geometry.ts';
+import { parseRallies, type ReviewedRally } from './rallies.ts';
 export type Observation<T> = { value: T; source: 'manual' | 'automatic'; confidence?: number };
 export type BallObservation = { timestamp: number; position: Observation<Point> };
 export type Player = { id: string; name: string; association?: { timestamp: number; position: Observation<Point> } };
@@ -16,7 +17,13 @@ export type Session = {
   players: Player[];
   selectedPlayerId: string;
   ballFps?: number;
+  rallies?: ReviewedRally[];
 };
+
+export function sessionMatchesVideo(saved: Session['video'], loaded: Session['video']) {
+  return saved.name === loaded.name && saved.size === loaded.size && saved.width === loaded.width && saved.height === loaded.height &&
+    (saved.duration === loaded.duration || /\.mkv$/i.test(loaded.name));
+}
 
 export function parseSession(text: string): Session {
   const s = JSON.parse(text) as Session;
@@ -42,5 +49,6 @@ export function parseSession(text: string): Session {
     if (shot.playerIdentity && (shot.playerIdentity.value !== shot.playerId || !['manual','automatic'].includes(shot.playerIdentity.source) || (shot.playerIdentity.confidence !== undefined && (!finite(shot.playerIdentity.confidence) || shot.playerIdentity.confidence < 0 || shot.playerIdentity.confidence > 1)))) throw new Error('Invalid player identity observation.');
   }
   if (!s.ballObservations.every(o => o && finite(o.timestamp) && o.timestamp >= 0 && o.timestamp <= s.video.duration && observation(o.position))) throw new Error('Invalid ball observations.');
+  if (s.rallies !== undefined) s.rallies = parseRallies(s.rallies, s.video.duration, new Set(s.players.map(p => p.id)));
   return s;
 }

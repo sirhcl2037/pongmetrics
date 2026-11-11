@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { VideoWorkspace } from './VideoWorkspace';
 import { defaultPlayers, strokeTypes, type Player, type Shot } from './session';
 import { PlayerSetup } from './PlayerSetup';
+import { formatVideoTime as timestamp } from './videoFrames';
 
 type Wing = "FH" | "BH";
 type Stroke = Shot['stroke'];
@@ -87,12 +88,6 @@ function App() {
 
   const usage = shots.length ? forehands / shots.length * 100 : 0;
   const visibleShots = shots.filter(shot => filter === "All" || shot.wing === filter);
-  const timestamp = (time: number) => {
-    const hundredths = Math.round(time * 100);
-    const minutes = Math.floor(hundredths / 6000);
-    const seconds = (hundredths % 6000) / 100;
-    return `${String(minutes).padStart(2, '0')}:${seconds.toFixed(2).padStart(5, '0')}`;
-  };
 
   return (
     <div className="app-shell">

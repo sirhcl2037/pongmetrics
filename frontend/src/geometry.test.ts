@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { homography, transform, TABLE, validateCorners, imageRect, normalizePoint } from './geometry.ts';
-import { parseSession, defaultPlayers } from './session.ts';
+import { parseSession, defaultPlayers, sessionMatchesVideo } from './session.ts';
+import { rallyRangeError, type ReviewedRally } from './rallies.ts';
 import { ballTrail, recentBallTrail, parseDetections, parseTrackingFrames } from './ballDetections.ts';
 import { clickedPlayerTrack, landmarkNames, parsePlayerTracks, playerTrackNames, type PlayerTracks } from './playerTracks.ts';
 import { detectShotCandidates, playerAxisEvidence } from './shotDetection.ts';
@@ -9,6 +10,31 @@ import { analyzeReviewedShots, matchContacts } from './shotAnalysis.ts';
 import type { Shot } from './session.ts';
 import { displayedFrameIndex } from './videoFrames.ts';
 import { parseReviewDraft } from './reviewDraft.ts';
+
+test('rally reviews round-trip with manual results and allow adjacent ranges', () => {
+  const players = defaultPlayers();
+  const session = {version:2, video:{name:'match.mp4', size:100, width:1280, height:720, duration:9},
+    fps:25, coordinateSystem:'normalized-video-image', calibration:null, shots:[], ballObservations:[], players, selectedPlayerId:players[0].id};
+  const first: ReviewedRally = {id:'first', start:1, end:3, winnerId:players[1].id, focus:'footwork-recovery', note:'Recover after the wide forehand.'};
+  const second: ReviewedRally = {id:'second', start:3, end:5, winnerId:null, focus:null, note:''};
+  const restore = (rallies: unknown) => parseSession(JSON.stringify({...session, rallies}));
+  assert.equal(parseSession(JSON.stringify(session)).rallies, undefined);
+  assert.deepEqual(restore([second, first]).rallies, [first, second]);
+  assert.equal(rallyRangeError(first, 9, [first, second], first.id), '');
+  assert.match(rallyRangeError({...first, end:4}, 9, [first, second], first.id), /overlaps/);
+  assert.throws(() => restore([first, {...second, start:2}]), /overlap/);
+  for (const bad of [{...first, id:second.id}, {...first, winnerId:'missing'}, {...first, end:10},
+    {...first, end:1}, {...first, focus:'invalid'}, {...first, note:'x'.repeat(1001)}]) {
+    assert.throws(() => restore([bad, second]), /Invalid rally review/);
+  }
+});
+
+test('session reopen accepts corrected MKV duration with the same source metadata', () => {
+  const source = {name:'match.mkv', size:100, width:3840, height:2160, duration:11};
+  assert.equal(sessionMatchesVideo({...source, duration:15.28}, source), true);
+  assert.equal(sessionMatchesVideo({...source, duration:15.28, size:101}, source), false);
+  assert.equal(sessionMatchesVideo({...source, name:'match.mp4', duration:15.28}, {...source, name:'match.mp4'}), false);
+});
 
 test('MKV detections can extend an incorrect header duration while matching the same source', () => {
   const video = {name:'clip.mkv',size:100,width:3840,height:2160,duration:11};

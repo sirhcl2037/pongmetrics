@@ -45,4 +45,6 @@ experiments/ball_detection/output/pose-env/Scripts/python.exe experiments/ball_d
 
 Add `--times ... --track-ids ... --comparison-dir ...` for a sparse diagnostic run. Sparse outputs are only visible at sampled frames. The full 720p and 4K outputs are `output/body-landmarks-rtmpose-720p.json` and `output/body-landmarks-rtmpose-4k.json`. Comparison sheets are in `output/rtmpose-720p-comparison/` and `output/rtmpose-4k-comparison/` (left YOLO full frame, right RTMPose source region).
 
+Sparse refinement decodes sequentially and converts only the selected frames to BGR. In a paired 4K run at 6.10, 6.30, 6.50, 6.70, 6.90, and 7.00 seconds, processing time fell from 8.19 to 1.97 seconds. All 12 poses and their timestamps matched exactly. The full 720p refinement also matched all 426 poses across 219 frames.
+
 Unit tests verify affine center mapping, aspect ratio, inverse SimCC coordinates, invalid/missing joints, and malformed inputs. The existing frontend import parser also accepts these real outputs. No automatic coaching claims or forced joint visibility classifications are added.

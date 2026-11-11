@@ -33,12 +33,14 @@ def main():
     started=time.perf_counter();model=RTMPose(args.weights, flip_test=args.flip_test);startup=time.perf_counter()-started
     cv2.setNumThreads(1)
     cap=cv2.VideoCapture(str(args.video));output=[];calls=0;elapsed=0.;i=0
+    last_frame = max(requested)
     if args.comparison_dir: args.comparison_dir.mkdir(parents=True,exist_ok=True)
     try:
-        while i<=max(requested):
-            ok,image=cap.read()
-            if not ok: raise ValueError('Source ended before requested frames')
+        while i <= last_frame:
+            if not cap.grab(): raise ValueError('Source ended before requested frames')
             if i in requested:
+                ok, image = cap.retrieve()
+                if not ok: raise ValueError(f'Could not decode requested frame {i}')
                 row=copy.deepcopy(rows[i]);row['people']=[];tiles=[]
                 h,w=image.shape[:2]
                 for original in rows[i]['people']:

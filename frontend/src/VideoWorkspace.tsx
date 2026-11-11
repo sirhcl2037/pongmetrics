@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { homography, imageRect, normalizePoint, TABLE, transform, validateCorners, type Point } from './geometry';
-import { parseSession, type Observation, type Session, type Shot, type Player } from './session';
+import { parseSession, sessionMatchesVideo, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
 import { ShotSuggestions } from './ShotSuggestions';
 import { ShotAnalysisReview } from './ShotAnalysisReview';
+import { RallyReview } from './RallyReview';
+import type { ReviewedRally } from './rallies';
 import { ballTrail, parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
 import { parseReviewDraft, reviewDraftKey } from './reviewDraft';
 import { BallTrackingDebug } from './BallTrackingDebug';
@@ -45,6 +47,9 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     if (autoAdvance) seek(1);
   }
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
+  const [rallies, setRallies] = useState<ReviewedRally[]>([]);
+  const [sessionStatus, setSessionStatus] = useState('');
+  const [sessionRevision, setSessionRevision] = useState(0);
   const [calibration, setCalibration] = useState<Session['calibration']>(null);
   const [draft, setDraft] = useState<Point[] | null>(null);
   const [inspect, setInspect] = useState(false);
@@ -231,27 +236,28 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   async function importFile(file: File) {
     try {
       const session = parseSession(await file.text());
-      if (!metadata || JSON.stringify(session.video) !== JSON.stringify(metadata)) {
-        // Compare named fields, independent of JSON property order.
-        if (!metadata || (Object.keys(metadata) as (keyof typeof metadata)[]).some(key => session.video[key] !== metadata[key])) {
-          setMessage('Load the matching video first (name, size, dimensions and duration must match).');
-          return;
-        }
+      if (!metadata || !sessionMatchesVideo(session.video, metadata)) {
+        setSessionStatus('Load the video that matches this session.');
+        return;
       }
       cancelBallTracking();
+      videoRef.current?.pause();
+      if (session.video.duration > metadata.duration) setMetadata({ ...metadata, duration: session.video.duration });
+      setRallies(session.rallies ?? []);
+      setSessionRevision(revision => revision + 1);
       setFps(session.fps); setCalibration(session.calibration); onShots([...session.shots].sort((a,b) => a.time-b.time)); setBallObservations([...session.ballObservations].sort((a,b) => a.timestamp-b.timestamp));
-      setDraft(null); setInspect(false); setSelected(null); setMessage('Session imported.');
+      setDraft(null); setInspect(false); setSelected(null); setSessionStatus('Session imported.');
       onPlayers(session.players); onSelectPlayer(session.selectedPlayerId); onLocate(null);
       setBallFps(session.ballFps ?? session.fps); setTrackingFrames([]);
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not import session.'); }
+    } catch (error) { setSessionStatus(error instanceof Error ? error.message : 'Could not import session.'); }
   }
   function exportFile() {
     if (!metadata) return;
-    const session: Session = { version: 2, video: metadata, fps, coordinateSystem: 'normalized-video-image', calibration, shots, ballObservations, players, selectedPlayerId, ballFps };
+    const session: Session = { version: 2, video: metadata, fps, coordinateSystem: 'normalized-video-image', calibration, shots, ballObservations, players, selectedPlayerId, ballFps, rallies };
     const href = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = href; a.download = `${name}.pongmetrics.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
-    setMessage('Session exported. Keep this JSON with the original video.');
+    setSessionStatus('Session exported. Keep this JSON with the original video.');
   }
   return <>
     <div className="video-stage">
@@ -316,6 +322,14 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         </svg>
       </div>
     </div>
+    <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
+      duration={metadata?.duration ?? 0} players={players} shots={shots} />
+    <div className="workspace-tools session-tools" role="group" aria-label="Session file controls">
+      <button disabled={!metadata} onClick={exportFile}>Export JSON</button>
+      <button disabled={!metadata} onClick={() => importRef.current?.click()}>Import JSON</button>
+      <input className="visually-hidden" ref={importRef} type="file" aria-label="Session JSON file" accept=".json,application/json" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = ''; }} />
+      <span role="status">{sessionStatus || 'Keep the session JSON with your video.'}</span>
+    </div>
     <BallLabeler enabled={labeling} onToggle={() => { videoRef.current?.pause(); setLabeling(!labeling); setDraft(null); setInspect(false); onLocate(null); }}
       time={displayedTime} fps={fps} video={metadata} labels={ballLabels} onLabel={saveBallLabel}
       onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek}
@@ -367,7 +381,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       {locatingPlayerId && <div className="workspace-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
       <div className="workspace-tools"><button disabled={!metadata} onClick={() => seek(-1)}>← Previous frame</button><button disabled={!metadata} onClick={() => seek(1)}>Next frame →</button><label>FPS <input aria-label="Video FPS" type="number" min="1" max="240" value={fps} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 1 && n <= 240) setFps(n); }} /></label></div>
       <p>Frame steps use 1 / FPS seconds. Match FPS to your clip; variable-rate footage may not seek to exact frames.</p>
-      <div className="workspace-tools"><button disabled={!metadata} onClick={startCalibration}>{calibration ? 'Recalibrate table' : 'Calibrate table'}</button>{draft !== null && <button onClick={() => { setDraft(null); setMessage(''); }}>Cancel</button>}<button disabled={!calibration || draft !== null} aria-pressed={inspect} onClick={() => { videoRef.current?.pause(); setInspect(!inspect); }}>Inspect table {inspect ? 'on' : 'off'}</button><button disabled={!metadata} onClick={exportFile}>Export JSON</button><button disabled={!metadata} onClick={() => importRef.current?.click()}>Import JSON</button><input className="visually-hidden" ref={importRef} type="file" accept=".json,application/json" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = ''; }} /></div>
+      <div className="workspace-tools"><button disabled={!metadata} onClick={startCalibration}>{calibration ? 'Recalibrate table' : 'Calibrate table'}</button>{draft !== null && <button onClick={() => { setDraft(null); setMessage(''); }}>Cancel</button>}<button disabled={!calibration || draft !== null} aria-pressed={inspect} onClick={() => { videoRef.current?.pause(); setInspect(!inspect); }}>Inspect table {inspect ? 'on' : 'off'}</button></div>
       <p>{draft !== null ? `Click ${labels[draft.length]}. Order: ${labels.join(' → ')}. Near = end closest to the camera; left/right as seen in the image.` : 'Origin: near-left. x across width (1.525 m); y toward the far end (2.74 m). Recalibrate after camera movement or cuts.'}</p>
       {selected && <output>Table plane: x = {selected.x.toFixed(4)} m, y = {selected.y.toFixed(4)} m</output>}
       <p>Planar mapping applies only to the table surface, not airborne ball positions. Inspector clicks are not ball training labels.</p>
