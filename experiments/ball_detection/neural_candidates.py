@@ -3,13 +3,35 @@ import argparse
 from collections import deque
 import hashlib
 import json
+import os
 from pathlib import Path
+import sys
 import time
 
 import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
+WEIGHTS = ROOT / 'balltrack_best.pth'
+
+
+def load_tracknet(weights_hash, head_adapter, threads=4):
+    import torch
+    from detect import TrackNet
+    from mmengine.logging.history_buffer import HistoryBuffer
+
+    torch.set_num_threads(threads)
+    with torch.serialization.safe_globals([HistoryBuffer, np.ndarray, np.dtype,
+            (np._core.multiarray.scalar, 'numpy.core.multiarray.scalar'),
+            (np._core.multiarray._reconstruct, 'numpy.core.multiarray._reconstruct'),
+            type(np.dtype('float64')), type(np.dtype('int64')), getattr]):
+        state = torch.load(WEIGHTS, map_location='cpu', weights_only=True)
+    model = TrackNet(in_dim=15, out_dim=4, last_only=True).eval()
+    model.load_state_dict({k.removeprefix('module.'): v for k, v in state.get('state_dict', state).items()})
+    if head_adapter is not None:
+        from head_adapter import apply_head_adapter
+        apply_head_adapter(model, head_adapter, weights_hash)
+    return model
 
 
 def temporal_indices(index):
@@ -54,11 +76,40 @@ def extract_weak_peaks(heatmap, offset=(0, 0), floor=.01):
     return sorted(result, key=lambda c: c['score'], reverse=True)[:100]
 
 
+def sample_background(capture, end, indices, native_zoom, scan_to_end):
+    """Decode sequentially, retrieving BGR pixels only for sampled frames."""
+    samples, zoom_samples = [], []
+    last_timestamp = None
+    index = 0
+    try:
+        while capture.grab():
+            timestamp = capture.get(cv2.CAP_PROP_POS_MSEC) / 1000
+            if timestamp >= end and not scan_to_end:
+                break
+            last_timestamp = timestamp
+            if timestamp < end and (indices is None or index in indices):
+                ok, frame = capture.retrieve()
+                if not ok:
+                    raise ValueError('Could not retrieve a background sample')
+                samples.append(cv2.resize(frame, (512, 288)))
+                if native_zoom:
+                    zoom_samples.append(cv2.resize(frame, (1024, 576)))
+            index += 1
+    finally:
+        capture.release()
+    return samples, zoom_samples, last_timestamp
+
+
 class StreamingDetector:
     """Four source frames and a bounded sampled background; no clip-sized array."""
-    def __init__(self, video, end=float('inf'), background_samples=24, candidate_floor=.15, weak_peaks=False, native_zoom=False, head_adapter=None):
+    def __init__(self, video, end=float('inf'), background_samples=24, candidate_floor=.15, weak_peaks=False,
+                 native_zoom=False, head_adapter=None, *, backend='torch', cpu_threads=None):
         if not 0 < candidate_floor < .5:
             raise ValueError('Candidate floor must be between zero and .5')
+        if backend not in ('auto', 'torch', 'onnx'):
+            raise ValueError('Unsupported inference backend')
+        if cpu_threads is not None and (not isinstance(cpu_threads, int) or cpu_threads < 1):
+            raise ValueError('CPU thread count must be a positive integer')
         self.candidate_floor = candidate_floor
         self.weak_peaks = weak_peaks
         self.native_zoom = native_zoom
@@ -79,22 +130,7 @@ class StreamingDetector:
         # samples; 0 explicitly requests its historical, unbounded full median.
         last = max(0, int(np.ceil(self.end*self.fps))-1)
         indices = set(np.linspace(0, last, min(background_samples, last+1), dtype=int)) if background_samples else None
-        samples = []
-        zoom_samples = []
-        i = 0
-        last_timestamp = None
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)/1000
-            last_timestamp = timestamp
-            if timestamp < self.end and (indices is None or i in indices):
-                samples.append(cv2.resize(frame, (512, 288)))
-                if native_zoom:
-                    zoom_samples.append(cv2.resize(frame, (1024, 576)))
-            i += 1
-        cap.release()
+        samples, zoom_samples, last_timestamp = sample_background(cap, self.end, indices, native_zoom, scan_to_end=True)
         # MKV frame-count/duration headers can underreport decodable footage.
         if last_timestamp is not None:
             self.video['duration'] = round(last_timestamp + 1/self.fps, 6)
@@ -103,19 +139,8 @@ class StreamingDetector:
                 self.end = corrected_end
                 last = max(0, int(np.ceil(self.end*self.fps))-1)
                 indices = set(np.linspace(0, last, min(background_samples, last+1), dtype=int)) if background_samples else None
-                samples, zoom_samples = [], []
                 cap = cv2.VideoCapture(str(video))
-                index = 0
-                while True:
-                    ok, frame = cap.read()
-                    if not ok or cap.get(cv2.CAP_PROP_POS_MSEC)/1000 >= self.end:
-                        break
-                    if indices is None or index in indices:
-                        samples.append(cv2.resize(frame, (512, 288)))
-                        if native_zoom:
-                            zoom_samples.append(cv2.resize(frame, (1024, 576)))
-                    index += 1
-                cap.release()
+                samples, zoom_samples, _ = sample_background(cap, self.end, indices, native_zoom, scan_to_end=False)
         if not samples:
             raise ValueError('No background frames')
         self.background_sample_count = len(samples)
@@ -124,22 +149,28 @@ class StreamingDetector:
         if native_zoom:
             self.zoom_background = np.median(np.stack(zoom_samples), axis=0).astype(np.float32)/255
             del zoom_samples
-        import torch
-        from detect import TrackNet
-        from mmengine.logging.history_buffer import HistoryBuffer
-        torch.set_num_threads(4)
-        with torch.serialization.safe_globals([HistoryBuffer, np.ndarray, np.dtype,
-                (np._core.multiarray.scalar, 'numpy.core.multiarray.scalar'),
-                (np._core.multiarray._reconstruct, 'numpy.core.multiarray._reconstruct'),
-                type(np.dtype('float64')), type(np.dtype('int64')), getattr]):
-            state = torch.load(ROOT/'balltrack_best.pth', map_location='cpu', weights_only=True)
-        self.model = TrackNet(in_dim=15, out_dim=4, last_only=True).eval()
-        self.model.load_state_dict({k.removeprefix('module.'): v for k, v in state.get('state_dict', state).items()})
-        self.weights_hash = hashlib.sha256((ROOT/'balltrack_best.pth').read_bytes()).hexdigest()
-        self.head_adapter_hash = None
-        if head_adapter is not None:
-            from head_adapter import apply_head_adapter
-            self.head_adapter_hash = apply_head_adapter(self.model, head_adapter, self.weights_hash)
+        self.weights_hash = hashlib.sha256(WEIGHTS.read_bytes()).hexdigest()
+        self.head_adapter_hash = hashlib.sha256(Path(head_adapter).read_bytes()).hexdigest() if head_adapter else None
+        self.onnx_session = None
+        self.backend = 'torch'
+        self.cpu_threads = cpu_threads or 4
+        if backend in ('auto', 'onnx'):
+            from onnx_ball import bundle_path, load_session
+            graph = bundle_path(ROOT, self.weights_hash, self.head_adapter_hash)
+            onnx_threads = cpu_threads or min(8, os.cpu_count() or 1)
+            if graph.is_file() or backend == 'onnx':
+                try:
+                    self.onnx_session = load_session(graph, self.weights_hash, self.head_adapter_hash,
+                                                     onnx_threads, require_preference=backend == 'auto')
+                except (ImportError, OSError, ValueError) as error:
+                    if backend == 'onnx':
+                        raise ValueError(f'Cannot load the ball ONNX export: {error}') from error
+                    print(f'Using PyTorch for ball detection: {error}', file=sys.stderr)
+                if self.onnx_session is not None:
+                    self.backend = 'onnx'
+                    self.cpu_threads = onnx_threads
+        if self.onnx_session is None:
+            self.model = load_tracknet(self.weights_hash, head_adapter, self.cpu_threads)
         self.startup_seconds = time.perf_counter()-began
         self.calls = self.crop_calls = self.full_frame_calls = 0
         self.inference_seconds = 0.
@@ -177,7 +208,6 @@ class StreamingDetector:
             cap.release()
 
     def detect(self, history, center=None):
-        import torch
         if self.native_zoom:
             if center is not None:
                 return self.detect_native_crop(history, center)
@@ -191,12 +221,8 @@ class StreamingDetector:
             self.full_frame_calls += 1
         region = np.s_[top:top+height, left:left+width]
         sequence = [self.background[region], *[f[region].astype(np.float32)/255 for f in history]]
-        tensor = torch.from_numpy(np.stack(sequence).transpose(0, 3, 1, 2).reshape(1, 15, height, width))
-        began = time.perf_counter()
-        with torch.inference_mode():
-            heatmap = self.model(frames=tensor)[0][0, 0].numpy()
-        self.inference_seconds += time.perf_counter()-began
-        self.calls += 1
+        frames = np.stack(sequence).transpose(0, 3, 1, 2).reshape(1, 15, height, width)
+        heatmap = self.infer_heatmap(frames)
         candidates = extract_candidates(heatmap, (left, top), self.candidate_floor)
         if self.weak_peaks:
             candidates.extend(extract_weak_peaks(heatmap, (left, top)))
@@ -207,7 +233,6 @@ class StreamingDetector:
 
     def detect_native_crop(self, history, center):
         """Crop half the source width/height, then resize to the full model input."""
-        import torch
         source_height, source_width = history[-1].shape[:2]
         width, height = source_width//2, source_height//2
         left = int(np.clip(round(center[0]*source_width-width/2), 0, source_width-width))
@@ -216,12 +241,8 @@ class StreamingDetector:
         # The sampled median is retained at 2x model resolution, avoiding 24 full 4K backgrounds.
         x0, y0 = round(left/source_width*1024), round(top/source_height*576)
         background = self.zoom_background[y0:y0+288, x0:x0+512]
-        tensor = torch.from_numpy(np.stack([background, *crops]).transpose(0, 3, 1, 2).reshape(1, 15, 288, 512))
-        began = time.perf_counter()
-        with torch.inference_mode():
-            heatmap = self.model(frames=tensor)[0][0, 0].numpy()
-        self.inference_seconds += time.perf_counter()-began
-        self.calls += 1
+        frames = np.stack([background, *crops]).transpose(0, 3, 1, 2).reshape(1, 15, 288, 512)
+        heatmap = self.infer_heatmap(frames)
         self.crop_calls += 1
         candidates = extract_candidates(heatmap, floor=self.candidate_floor)
         result = []
@@ -231,6 +252,18 @@ class StreamingDetector:
             result.append({**candidate, 'x':(left+candidate['x']*width)/source_width,
                            'y':(top+candidate['y']*height)/source_height})
         return result
+
+    def infer_heatmap(self, frames):
+        began = time.perf_counter()
+        if self.onnx_session is not None:
+            heatmap = self.onnx_session.run(['heatmap'], {'frames':frames})[0][0, 0]
+        else:
+            import torch
+            with torch.inference_mode():
+                heatmap = self.model(frames=torch.from_numpy(frames))[0][0, 0].numpy()
+        self.inference_seconds += time.perf_counter() - began
+        self.calls += 1
+        return heatmap
 
 
 def main():

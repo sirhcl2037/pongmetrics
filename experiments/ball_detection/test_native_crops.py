@@ -17,6 +17,7 @@ class CaptureModel:
 class NativeCropTests(unittest.TestCase):
     def detector(self):
         detector = object.__new__(StreamingDetector)
+        detector.onnx_session = None
         detector.model = CaptureModel()
         detector.zoom_background = np.zeros((576, 1024, 3), dtype=np.float32)
         detector.candidate_floor = .15

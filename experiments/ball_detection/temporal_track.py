@@ -233,11 +233,16 @@ def main():
     p.add_argument('--candidate-floor', type=float, default=.15)
     p.add_argument('--weak-peaks', action='store_true', help='Experimental additional local maxima; requires validation')
     p.add_argument('--full-frame', action='store_true', help='Disable guided crops for controlled comparisons')
+    p.add_argument('--backend', choices=('auto', 'torch', 'onnx'), default='auto',
+                   help='Use an approved local ONNX export when available, or explicitly choose a runtime')
+    p.add_argument('--cpu-threads', type=int, help='Override the inference runtime thread count')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--save-candidates', type=Path)
     a = p.parse_args()
     if a.start < 0 or a.end <= a.start or a.background_samples < 0 or not 0 < a.candidate_floor < .5:
         p.error('Invalid end or sample count')
+    if a.cpu_threads is not None and a.cpu_threads < 1:
+        p.error('CPU thread count must be positive')
     if a.candidates:
         if a.head_adapter or a.base_model:
             p.error('Cached evidence already belongs to a model; model selection requires --video')
@@ -257,7 +262,9 @@ def main():
             p.error(str(error))
         if a.native_zoom and a.weak_peaks:
             p.error('Compare native zoom independently of weak-peak recovery')
-        detector = StreamingDetector(a.video, a.end, a.background_samples, a.candidate_floor, a.weak_peaks, a.native_zoom, adapter)
+        detector = StreamingDetector(a.video, a.end, a.background_samples, a.candidate_floor, a.weak_peaks,
+                                     a.native_zoom, adapter, backend=a.backend, cpu_threads=a.cpu_threads)
+        print(f'Ball inference: {detector.backend} on {detector.cpu_threads} CPU threads', flush=True)
         tracker = BallTracker(detector.fps, association, acquisition)
         source_rows = []
         failures = 0
@@ -292,7 +299,8 @@ def main():
                      model=dict(name='RacketVision TrackNetV3', weightsSha256=detector.weights_hash,
                                 backgroundSamples=detector.background_sample_count, candidateFloor=a.candidate_floor, weakPeaks=a.weak_peaks,
                                 nativeZoom=a.native_zoom, headAdapterSha256=detector.head_adapter_hash, headAdapterName=adapter_name, strongScore=association,
-                                acquisitionScore=tracker.acquisition_score,
+                                acquisitionScore=tracker.acquisition_score, inferenceBackend=detector.backend,
+                                cpuThreads=detector.cpu_threads,
                                 analyzedStart=a.start, analyzedEnd=a.end if np.isfinite(a.end) else detector.end,
                                 temporalOrder='background,BGR[i-3],BGR[i-2],BGR[i-1],BGR[i]; repeat first'),
                      summary=dict(heavyCalls=detector.calls, cropCalls=detector.crop_calls,

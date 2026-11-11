@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import torch
 
 
 def model_settings(adapter=None, base_model=False, strong_score=None, acquisition_score=None, default_path=None):
@@ -28,26 +27,34 @@ def model_settings(adapter=None, base_model=False, strong_score=None, acquisitio
     return selected, association, acquisition, metadata.get('name')
 
 
-class ResidualHead(torch.nn.Module):
-    def __init__(self, original, hidden_weight, hidden_bias, output_weight, output_bias, cap):
-        super().__init__()
-        self.original = original
-        self.hidden = torch.nn.Conv2d(hidden_weight.shape[1],hidden_weight.shape[0],1)
-        self.output = torch.nn.Conv2d(hidden_weight.shape[0],1,1)
-        self.cap = cap
-        with torch.no_grad():
-            self.hidden.weight.copy_(torch.tensor(hidden_weight[:,:,None,None]))
-            self.hidden.bias.copy_(torch.tensor(hidden_bias))
-            self.output.weight.copy_(torch.tensor(output_weight[None,:,None,None]))
-            self.output.bias.fill_(output_bias)
+def residual_head(original, hidden_weight, hidden_bias, output_weight, output_bias, cap):
+    import torch
 
-    def forward(self, features):
-        original = self.original(features)
-        residual = self.cap*torch.tanh(self.output(torch.relu(self.hidden(features)))/self.cap)
-        return torch.cat([original[:,:-1],original[:,-1:]+residual],dim=1)
+    class ResidualHead(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.original = original
+            hidden, channels = hidden_weight.shape
+            self.hidden = torch.nn.Conv2d(channels, hidden, 1)
+            self.output = torch.nn.Conv2d(hidden, 1, 1)
+            self.cap = cap
+            with torch.no_grad():
+                self.hidden.weight.copy_(torch.tensor(hidden_weight[:,:,None,None]))
+                self.hidden.bias.copy_(torch.tensor(hidden_bias))
+                self.output.weight.copy_(torch.tensor(output_weight[None,:,None,None]))
+                self.output.bias.fill_(output_bias)
+
+        def forward(self, features):
+            original_logits = self.original(features)
+            residual = self.cap * torch.tanh(self.output(torch.relu(self.hidden(features))) / self.cap)
+            return torch.cat([original_logits[:,:-1], original_logits[:,-1:] + residual], dim=1)
+
+    return ResidualHead().eval()
 
 
 def apply_head_adapter(model, path, base_hash):
+    import torch
+
     raw = Path(path).read_bytes()
     adapter = json.loads(raw)
     channels = model.predictor.weight.shape[1]
@@ -74,5 +81,5 @@ def apply_head_adapter(model, path, base_hash):
         model.predictor.weight[-1, :, 0, 0].copy_(torch.tensor(values))
         model.predictor.bias[-1].fill_(adapter['bias'])
     if residual is not None:
-        model.predictor = ResidualHead(model.predictor,*residual).eval()
+        model.predictor = residual_head(model.predictor, *residual)
     return hashlib.sha256(raw).hexdigest()

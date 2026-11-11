@@ -2,6 +2,8 @@
 
 ## Current temporal neural tracker
 
+See [INFERENCE_SPEED.md](INFERENCE_SPEED.md) for the float32 ONNX CPU path, paired speed measurements, and complete-clip output comparisons.
+
 The validated local default now uses the small, data-trained `review-head-v1` adapter with separate follow/restart confidence cutoffs. See [HEAD_ADAPTATION.md](HEAD_ADAPTATION.md) for training provenance, cross-rally development results, rejected trials, and limitations. Use `temporal_track.py --base-model --video ...` to reproduce the original pretrained detector. No extra neural-network layers are enabled in the default.
 
 See [TRACKING.md](TRACKING.md) for the streaming neural tracker, cached regression fixture, evaluation commands, measured results, and limitations. Localhost now has **Generate ball tracks** and a separate prediction/search overlay. The original detector and color experiments below remain available as references; their historical timings and defaults do not describe the new pipeline.
