@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { rallyFocusOptions, rallyNoteLimit, rallyRangeError, type RallyRange, type ReviewedRally } from './rallies';
 import type { Player, Shot } from './session';
 import { formatVideoTime } from './videoFrames';
+import { RecoveryReview } from './RecoveryReview';
 
 type Props = {
   rallies: ReviewedRally[];
@@ -11,6 +12,9 @@ type Props = {
   duration: number;
   players: Player[];
   shots: Shot[];
+  onStep: (direction: number) => void;
+  pinVideo: boolean;
+  onPinVideo: (pin: boolean) => void;
 };
 
 function stopAtRallyEnd(video: HTMLVideoElement, replay: RefObject<RallyRange | null>) {
@@ -21,11 +25,11 @@ function stopAtRallyEnd(video: HTMLVideoElement, replay: RefObject<RallyRange | 
   video.currentTime = range.end;
 }
 
-export function RallyReview({ rallies, onChange, videoRef, displayedTime, duration, players, shots }: Props) {
+export function RallyReview({ rallies, onChange, videoRef, displayedTime, duration, players, shots, onStep, pinVideo, onPinVideo }: Props) {
   const [draft, setDraft] = useState<Partial<RallyRange> & { id?: string }>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const replay = useRef<ReviewedRally | null>(null);
+  const replay = useRef<(RallyRange & { id: string }) | null>(null);
   const active = rallies.find(rally => rally.id === selectedId) ?? rallies[0];
   const range = draft.start !== undefined && draft.end !== undefined ? { start: draft.start, end: draft.end } : null;
   const rangeError = range ? rallyRangeError(range, duration, rallies, draft.id) : '';
@@ -58,7 +62,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
 
   useEffect(() => {
     const playing = replay.current;
-    if (playing && !rallies.some(rally => rally.id === playing.id && rally.start === playing.start && rally.end === playing.end)) {
+    if (playing && !rallies.some(rally => rally.id === playing.id && rally.start <= playing.start && rally.end >= playing.end)) {
       replay.current = null;
       videoRef.current?.pause();
     }
@@ -104,7 +108,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
     video.currentTime = time;
   }
 
-  async function replayRally(rally: ReviewedRally) {
+  async function replayRally(rally: RallyRange & { id: string }) {
     const video = videoRef.current;
     if (!video) return;
     setMessage('');
@@ -138,6 +142,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
     </div>
     {(rangeError || message) && <p role="status">{rangeError || message}</p>}
     {active && <>
+      <label className="recovery-player"><input type="checkbox" checked={pinVideo} onChange={e => onPinVideo(e.target.checked)} /> Keep video visible while reviewing</label>
       <p>{rallies.length} saved {rallies.length === 1 ? 'rally' : 'rallies'} · {players.map(player =>
         `${player.name} won ${rallies.filter(rally => rally.winnerId === player.id).length}`).join(' · ')} · {unscored} unscored</p>
       {!!focusCounts.length && <p>{focusCounts.map(option => `${option.label} ${option.count}`).join(' · ')}</p>}
@@ -180,6 +185,9 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
           {formatVideoTime(shot.time)} · {players.find(player => player.id === shot.playerId)?.name ?? 'Unassigned'} · {shot.wing} {shot.stroke}
         </button>)}
       </div>}
+      <RecoveryReview active={active} rallies={rallies} shots={shots} players={players} onChange={onChange} onStep={onStep}
+        onJump={(rally, time) => { setSelectedId(rally.id); jumpTo(time); }}
+        onReplay={(rally, start, end) => void replayRally({ id: rally.id, start, end })} />
     </>}
   </section>;
 }

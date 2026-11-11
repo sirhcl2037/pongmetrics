@@ -1,3 +1,5 @@
+import { parseRecovery, type RecoveryJudgment } from './recovery.ts';
+
 export const rallyFocusOptions = [
   { value: 'serve-receive', label: 'Serve & receive' },
   { value: 'footwork-recovery', label: 'Footwork & recovery' },
@@ -13,6 +15,7 @@ export type ReviewedRally = RallyRange & {
   winnerId: string | null;
   focus: typeof rallyFocusOptions[number]['value'] | null;
   note: string;
+  recovery?: RecoveryJudgment[];
 };
 
 function validRange({ start, end }: RallyRange, duration: number) {
@@ -38,6 +41,7 @@ export function parseRallies(value: unknown, duration: number, playerIds: Readon
       throw new Error('Invalid rally review.');
     }
     ids.add(rally.id);
+    if (rally.recovery !== undefined) rally.recovery = parseRecovery(rally.recovery, duration, playerIds);
   }
   const sorted = (value as ReviewedRally[]).slice().sort((a, b) => a.start - b.start);
   if (sorted.some((rally, index) => index > 0 && sorted[index - 1].end > rally.start)) {

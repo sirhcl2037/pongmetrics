@@ -48,6 +48,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   }
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
   const [rallies, setRallies] = useState<ReviewedRally[]>([]);
+  const [pinReviewVideo, setPinReviewVideo] = useState(true);
   const [sessionStatus, setSessionStatus] = useState('');
   const [sessionRevision, setSessionRevision] = useState(0);
   const [calibration, setCalibration] = useState<Session['calibration']>(null);
@@ -260,7 +261,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     setSessionStatus('Session exported. Keep this JSON with the original video.');
   }
   return <>
-    <div className="video-stage">
+    <div className={`video-stage${pinReviewVideo && rallies.length ? ' pinned-review-video' : ''}`}>
       <div className="video-image-wrapper">
         <video ref={videoRef} src={url} controls onTimeUpdate={e => { onTime(e.currentTarget.currentTime); setTime(e.currentTarget.currentTime); }} onSeeked={e => { onTime(e.currentTarget.currentTime); setTime(e.currentTarget.currentTime); }} onLoadedMetadata={e => {
           const v = e.currentTarget;
@@ -323,7 +324,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       </div>
     </div>
     <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
-      duration={metadata?.duration ?? 0} players={players} shots={shots} />
+      duration={metadata?.duration ?? 0} players={players} shots={shots} onStep={seek}
+      pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} />
     <div className="workspace-tools session-tools" role="group" aria-label="Session file controls">
       <button disabled={!metadata} onClick={exportFile}>Export JSON</button>
       <button disabled={!metadata} onClick={() => importRef.current?.click()}>Import JSON</button>
