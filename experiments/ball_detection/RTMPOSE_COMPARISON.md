@@ -1,5 +1,7 @@
 # RTMPose optional pipeline — 2026-11-09
 
+A follow-up compares a higher-resolution model and a mirrored-crop pass on matched source boxes. See [POSE_REFINEMENT_TRIAL.md](POSE_REFINEMENT_TRIAL.md).
+
 ## Result and usage
 
 An additional **Generate body landmarks · RTMPose** button now runs YOLO11n person tracking and then RTMPose-m on original-source player regions. It uses an isolated CPU ONNX environment. Existing YOLO pose generation remains available. Both formats import through **Import player tracks**; player names still use Locate clicks. The static production app only displays imports; local generation remains a Vite development/preview capability.

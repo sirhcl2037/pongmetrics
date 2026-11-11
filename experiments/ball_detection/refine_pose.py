@@ -22,6 +22,7 @@ def main():
     p.add_argument('--times',type=float,nargs='+')
     p.add_argument('--track-ids',type=int,nargs='+')
     p.add_argument('--comparison-dir',type=Path)
+    p.add_argument('--flip-test', action='store_true', help='Average original and mirrored pose predictions')
     args=p.parse_args()
     data=json.loads(args.tracks.read_text(encoding='utf-8'))
     if data.get('format')!='pongmetrics-player-tracks' or data.get('version')!=1: raise ValueError('Unsupported tracks')
@@ -29,7 +30,7 @@ def main():
     rows={round(r['timestamp']*data['fps']):r for r in data['frames']}
     requested={round(t*data['fps']) for t in args.times} if args.times else set(rows)
     if not requested or not requested.issubset(rows): raise ValueError('Requested frames must have saved boxes')
-    started=time.perf_counter();model=RTMPose(args.weights);startup=time.perf_counter()-started
+    started=time.perf_counter();model=RTMPose(args.weights, flip_test=args.flip_test);startup=time.perf_counter()-started
     cv2.setNumThreads(1)
     cap=cv2.VideoCapture(str(args.video));output=[];calls=0;elapsed=0.;i=0
     if args.comparison_dir: args.comparison_dir.mkdir(parents=True,exist_ok=True)
@@ -59,10 +60,13 @@ def main():
     finally: cap.release()
     parent=data.get('model')
     data['frames']=output
-    data['model']={'name':'RTMPose-m body7 256x192','sha256':hashlib.sha256(args.weights.read_bytes()).hexdigest(),
-                   'runtime':'onnxruntime-cpu','inputSize':[192,256],'personBoxPadding':1.25,'parentDetector':parent,
+    width, height = model.input_size
+    data['model']={'name':f'RTMPose COCO-17 {height}x{width}','sha256':hashlib.sha256(args.weights.read_bytes()).hexdigest(),
+                   'runtime':'onnxruntime-cpu','inputSize':[width,height],'personBoxPadding':1.25,'parentDetector':parent,
+                   'flipTest':args.flip_test,
                    'confidenceMeaning':'clipped SimCC peak strength; not calibrated probability or visibility; rawScore retained'}
-    data['summary']={'frames':len(output),'poseCalls':calls,'poseSeconds':elapsed,'startupSeconds':startup,'totalSeconds':time.perf_counter()-started}
+    data['summary']={'frames':len(output),'poseCalls':calls,'inferenceCalls':calls * (2 if args.flip_test else 1),
+                     'poseSeconds':elapsed,'startupSeconds':startup,'totalSeconds':time.perf_counter()-started}
     args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(data,indent=2),encoding='utf-8')
     print(json.dumps(data['summary']),flush=True)
 
