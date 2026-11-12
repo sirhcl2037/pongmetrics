@@ -127,6 +127,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [trackingFrames, setTrackingFrames] = useState<TrackingFrame[]>([]);
   const [showBallDebug, setShowBallDebug] = useState(false);
   const [ballTracking, setBallTracking] = useState(false);
+  const [refineBallGaps, setRefineBallGaps] = useState(false);
   const [ballStatus, setBallStatus] = useState('');
   const ballController = useRef<AbortController | null>(null);
   function cancelBallTracking() {
@@ -143,7 +144,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     setBallTracking(true);
     setBallStatus('Tracking ball on this computer… Longer clips can take several minutes.');
     try {
-      const response = await fetch('/api/ball-tracks', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file, signal: controller.signal });
+      const response = await fetch('/api/ball-tracks', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream',
+        'X-PongMetrics-Refine-Gaps': refineBallGaps ? '1' : '0' }, body: file, signal: controller.signal });
       const data = await response.json();
       if (controller.signal.aborted) return;
       if (!response.ok) { setBallStatus(data.error || 'Ball tracking failed.'); return; }
@@ -339,6 +341,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       onNextUnreviewed={nextUnreviewed} autoAdvance={autoAdvance} onAutoAdvance={setAutoAdvance}
       onGenerate={localTracking ? () => void generateBallTracks() : null} generating={ballTracking} status={[ballStatus, message].filter(Boolean).join(' ')} storageStatus={storageStatus} onImport={backup => void importBallLabels(backup)} />
     <div className="calibration-controls">
+      {localTracking && <label className="recovery-player"><input type="checkbox" checked={refineBallGaps} disabled={ballTracking}
+        onChange={e => setRefineBallGaps(e.target.checked)} /> Recover short ball gaps (extra analysis time)</label>}
       <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label><input type="checkbox" checked={showBallTrail} disabled={!showBall} onChange={e => setShowBallTrail(e.target.checked)} /> Detection trail</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {

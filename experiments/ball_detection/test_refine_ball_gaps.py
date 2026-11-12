@@ -1,7 +1,8 @@
 import copy
 import unittest
 
-from refine_ball_gaps import refine
+from probe_ball_gaps import probe
+from refine_ball_gaps import refine, refinement_targets
 
 
 class GapRefinementTest(unittest.TestCase):
@@ -41,6 +42,37 @@ class GapRefinementTest(unittest.TestCase):
         self.probe['frames'][0]['forward'] = [{'x':.29,'y':.5,'score':.13}]
         self.probe['frames'][0]['reverse'][0]['x'] = .29
         self.assertEqual(refine(self.baseline, self.probe)['summary']['gapRecoveries'], 0)
+
+    def test_ineligible_gaps_and_interior_crop_edges_do_not_schedule_inference(self):
+        rows = self.baseline['trackingFrames']
+        self.assertEqual(set(refinement_targets(rows, 25)[0]), {1})
+        rows[2]['sceneCut'] = True
+        self.assertEqual(refinement_targets(rows, 25), ({}, {}))
+        rows[1].update(search='crop', prediction={'x':.5, 'y':.5})
+        self.assertEqual(refinement_targets(rows, 25)[1], {})
+        rows[1]['prediction']['x'] = .998
+        self.assertEqual(set(refinement_targets(rows, 25)[1]), {1})
+
+    def test_probe_uses_runtime_neutral_api_and_never_crosses_a_future_cut(self):
+        class Detector:
+            fps = 25
+            calls = []
+            cut = False
+            def frames(self):
+                for frame in range(6):
+                    yield frame, frame/25, list(range(max(0, frame-3), frame+1)), self.cut and frame == 2
+            def detect(self, history, center=None, *, probe=False):
+                self.calls.append(([int(i) for i in history], probe))
+                return []
+        detector = Detector()
+        result = probe(detector, self.baseline['trackingFrames'])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(detector.calls, [([0,1],True), ([4,3,2,1],True)])
+        detector.calls = []
+        detector.cut = True
+        result = probe(detector, self.baseline['trackingFrames'])
+        self.assertEqual(detector.calls, [])
+        self.assertNotIn('reverse', result[0])
 
     def test_image_boundary_requires_crop_peak_and_two_supporting_passes(self):
         self.baseline['trackingFrames'].pop()

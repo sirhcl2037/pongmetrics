@@ -54,7 +54,8 @@ export function localPlayerTracking(): Plugin {
         ? join(experiment, '.venv', 'Scripts', 'python.exe')
         : join(experiment, '.venv', 'bin', 'python'));
       const args = ball
-          ? [join(experiment, 'temporal_track.py'), '--video', video, '--output', output]
+          ? [join(experiment, 'temporal_track.py'), '--video', video, '--output', output,
+              ...(req.headers['x-pongmetrics-refine-gaps'] === '1' ? ['--refine-gaps'] : [])]
           : [join(experiment, 'player_track.py'), video, ...(pose ? ['--pose', '--imgsz', '640'] : []), '--start', '0', '--end', 'inf', '--no-review-sheet', '--output', output];
       const run = (executable:string, workerArgs:string[]) => new Promise<void>((resolve, reject) => {
         const child = spawn(executable, workerArgs,

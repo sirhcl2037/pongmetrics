@@ -233,12 +233,15 @@ def main():
     p.add_argument('--candidate-floor', type=float, default=.15)
     p.add_argument('--weak-peaks', action='store_true', help='Experimental additional local maxima; requires validation')
     p.add_argument('--full-frame', action='store_true', help='Disable guided crops for controlled comparisons')
+    p.add_argument('--refine-gaps', action='store_true', help='Optional offline forward/reverse evidence pass for short gaps')
     p.add_argument('--backend', choices=('auto', 'torch', 'onnx'), default='auto',
                    help='Use an approved local ONNX export when available, or explicitly choose a runtime')
     p.add_argument('--cpu-threads', type=int, help='Override the inference runtime thread count')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--save-candidates', type=Path)
     a = p.parse_args()
+    if a.refine_gaps and (a.candidates or a.start != 0 or a.native_zoom or a.weak_peaks):
+        p.error('Gap refinement requires zero-start video with standard geometry and no experimental weak peaks')
     if a.start < 0 or a.end <= a.start or a.background_samples < 0 or not 0 < a.candidate_floor < .5:
         p.error('Invalid end or sample count')
     if a.cpu_threads is not None and a.cpu_threads < 1:
@@ -312,6 +315,18 @@ def main():
                 row['candidates'] = source['candidates']
             rows = recover_peak_gaps(rows, detector.fps)
         payload = make_payload(cache, rows, time.perf_counter()-began-detector.startup_seconds-detector.inference_seconds)
+        if a.refine_gaps:
+            from probe_ball_gaps import probe
+            from refine_ball_gaps import refine
+            before_calls, before_seconds = detector.calls, detector.inference_seconds
+            frames = probe(detector, payload['trackingFrames'])
+            payload = refine(payload, {'video':detector.video, 'fps':detector.fps, 'frames':frames,
+                'summary':{'frames':len(frames), 'calls':detector.calls-before_calls,
+                           'inferenceSeconds':detector.inference_seconds-before_seconds,
+                           'backend':detector.backend, 'cpuThreads':detector.cpu_threads}})
+            payload['summary'].update(heavyCalls=detector.calls, cropCalls=detector.crop_calls,
+                fullFrameCalls=detector.full_frame_calls, inferenceSeconds=detector.inference_seconds,
+                totalSeconds=time.perf_counter()-began)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(payload, indent=2), encoding='utf8')
     if a.save_candidates:

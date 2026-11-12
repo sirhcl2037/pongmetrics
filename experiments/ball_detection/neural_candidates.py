@@ -207,7 +207,9 @@ class StreamingDetector:
         finally:
             cap.release()
 
-    def detect(self, history, center=None):
+    def detect(self, history, center=None, *, probe=False):
+        if probe and self.native_zoom:
+            raise ValueError('Gap probes require standard crop geometry')
         if self.native_zoom:
             if center is not None:
                 return self.detect_native_crop(history, center)
@@ -224,9 +226,9 @@ class StreamingDetector:
         frames = np.stack(sequence).transpose(0, 3, 1, 2).reshape(1, 15, height, width)
         heatmap = self.infer_heatmap(frames)
         candidates = extract_candidates(heatmap, (left, top), self.candidate_floor)
-        if self.weak_peaks:
+        if self.weak_peaks or probe:
             candidates.extend(extract_weak_peaks(heatmap, (left, top)))
-        if center is not None:
+        if center is not None and not probe:
             candidates = [c for c in candidates if left+4 <= c['x']*512 < left+width-4
                           and top+4 <= c['y']*288 < top+height-4]
         return candidates

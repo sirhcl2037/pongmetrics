@@ -63,15 +63,45 @@ def image_edge_peak(evidence, expected):
     return {**candidate, 'direction':'crop', 'oppositeScore':support, 'trackResidualPixels':residual}
 
 
+def refinement_targets(rows, fps):
+    """Necessary geometric/continuity checks, shared by inference and refinement."""
+    gaps, edges = {}, {}
+    anchors = [i for i, row in enumerate(rows) if row['position'] is not None and row['confidence'] >= ANCHOR_SCORE]
+    for start, end in zip(anchors, anchors[1:]):
+        if not 1 < end - start <= MAX_MISSING_FRAMES + 1:
+            continue
+        left, right = rows[start], rows[end]
+        duration = right['timestamp'] - left['timestamp']
+        interval = rows[start:end+1]
+        if not 0 < duration * fps <= end - start + .1 or any(
+                b['sceneCut'] or b['frame'] != a['frame'] + 1 or
+                not .5 <= (b['timestamp'] - a['timestamp']) * fps <= 1.5
+                for a, b in zip(interval, interval[1:])):
+            continue
+        for row in rows[start+1:end]:
+            if row['position'] is None:
+                fraction = (row['timestamp'] - left['timestamp']) / duration
+                gaps[row['frame']] = ((1-fraction)*xy(left['position']) + fraction*xy(right['position']),
+                                     left['trackId'] if left['trackId'] == right['trackId'] else None)
+    for previous, row in zip(rows, rows[1:]):
+        if (row['position'] is None and row.get('search') == 'crop' and row.get('prediction') and
+                previous['position'] is not None and previous['confidence'] >= ANCHOR_SCORE and
+                not row['sceneCut'] and row['frame'] == previous['frame'] + 1 and
+                .5 <= (row['timestamp'] - previous['timestamp']) * fps <= 1.5):
+            expected = xy(row['prediction'])
+            # A peak within TRACK_RADIUS cannot reach the physical edge otherwise.
+            if np.min(np.minimum(expected, SCALE - expected)) <= IMAGE_EDGE_MARGIN + TRACK_RADIUS:
+                edges[row['frame']] = (expected, previous['trackId'])
+    return gaps, edges
+
+
 def refine(baseline, probe):
     if baseline['video'] != probe['video'] or baseline['fps'] != probe['fps']:
         raise ValueError('Gap probe and baseline must describe the same video')
     result = copy.deepcopy(baseline)
     rows = result['trackingFrames']
     evidence = {row['frame']:row for row in probe['frames']}
-    fps = baseline['fps']
-    anchors = [index for index, row in enumerate(rows)
-               if row['position'] is not None and row['confidence'] >= ANCHOR_SCORE]
+    gaps, edges = refinement_targets(baseline['trackingFrames'], baseline['fps'])
     additions = []
 
     def add_observation(row, peak, track_id, reason):
@@ -80,46 +110,24 @@ def refine(baseline, probe):
         additions.append({'timestamp':row['timestamp'], 'position':{'value':row['position'],
                           'source':'automatic', 'confidence':row['confidence']}})
 
-    for start, end in zip(anchors, anchors[1:]):
-        if not 1 < end - start <= MAX_MISSING_FRAMES + 1:
+    for row in rows:
+        frame = row['frame']
+        if row['position'] is not None or frame not in evidence or (frame not in gaps and frame not in edges):
             continue
-        left, right = rows[start], rows[end]
-        duration = right['timestamp'] - left['timestamp']
-        if not 0 < duration * fps <= end - start + .1:
-            continue
-        interval = rows[start:end+1]
-        if any(current['sceneCut'] or current['frame'] != previous['frame'] + 1 or
-               not .5 <= (current['timestamp'] - previous['timestamp']) * fps <= 1.5
-               for previous, current in zip(interval, interval[1:])):
-            continue
-        a, b = xy(left['position']), xy(right['position'])
-        for row in rows[start+1:end]:
-            if row['position'] is not None or row['frame'] not in evidence:
-                continue
-            observed = evidence[row['frame']]
-            if abs(observed['timestamp'] - row['timestamp']) > 1e-6:
-                raise ValueError('Probe timestamp does not match the missing frame')
-            fraction = (row['timestamp'] - left['timestamp']) / duration
-            peak = confirmed_peak(observed, (1-fraction)*a + fraction*b)
-            if peak is None:
-                continue
-            track_id = left['trackId'] if left['trackId'] == right['trackId'] else None
-            add_observation(row, peak, track_id, 'confirmed-forward-reverse-peak')
-
-    # At the physical image boundary, the guided crop can discard a real peak.
-    # Require the previous original observation and corroboration in both full-frame passes.
-    for previous, row in zip(baseline['trackingFrames'], rows[1:]):
-        if (row['position'] is not None or row.get('search') != 'crop' or not row.get('prediction') or
-                row['frame'] not in evidence or previous['position'] is None or previous['confidence'] < ANCHOR_SCORE or
-                row['sceneCut'] or row['frame'] != previous['frame'] + 1 or
-                not .5 <= (row['timestamp'] - previous['timestamp']) * fps <= 1.5):
-            continue
-        observed = evidence[row['frame']]
+        observed = evidence[frame]
         if abs(observed['timestamp'] - row['timestamp']) > 1e-6:
             raise ValueError('Probe timestamp does not match the missing frame')
-        peak = image_edge_peak(observed, xy(row['prediction']))
-        if peak is not None:
-            add_observation(row, peak, previous['trackId'], 'confirmed-image-edge-peak')
+        if frame in gaps:
+            expected, track_id = gaps[frame]
+            peak = confirmed_peak(observed, expected)
+            if peak is not None:
+                add_observation(row, peak, track_id, 'confirmed-forward-reverse-peak')
+                continue
+        if frame in edges:
+            expected, track_id = edges[frame]
+            peak = image_edge_peak(observed, expected)
+            if peak is not None:
+                add_observation(row, peak, track_id, 'confirmed-image-edge-peak')
     result['ballObservations'] = sorted(result['ballObservations'] + additions, key=lambda observation: observation['timestamp'])
     result['summary'].update(observations=len(result['ballObservations']), gapRecoveries=len(additions), gapProbe=probe['summary'])
     result['model']['gapRefinement'] = {'method':'forward-reverse-heatmap-agreement-v1',
