@@ -325,15 +325,26 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         </svg>
       </div>
     </div>
+    <div className="workspace-tools session-tools" role="group" aria-label="Session file controls">
+      <button disabled={!metadata} onClick={() => importRef.current?.click()}>Import JSON</button>
+      <button disabled={!metadata} onClick={exportFile}>Export JSON</button>
+      <input className="visually-hidden" ref={importRef} type="file" aria-label="Session JSON file" accept=".json,application/json" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = ''; }} />
+      <span role="status">{sessionStatus}</span>
+    </div>
+    <div className="workspace-tools review-frame-tools" role="group" aria-label="Video review controls">
+      <button disabled={!metadata} onClick={() => seek(-1)}>← Previous frame</button>
+      <button disabled={!metadata} onClick={() => seek(1)}>Next frame →</button>
+      {!!ballObservations.length && <label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label>}
+    </div>
+    {locatingPlayerId && <div className="workspace-tools review-frame-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
     <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
       duration={metadata?.duration ?? 0} players={players} shots={shots} onStep={seek}
       pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} />
-    <div className="workspace-tools session-tools" role="group" aria-label="Session file controls">
-      <button disabled={!metadata} onClick={exportFile}>Export JSON</button>
-      <button disabled={!metadata} onClick={() => importRef.current?.click()}>Import JSON</button>
-      <input className="visually-hidden" ref={importRef} type="file" aria-label="Session JSON file" accept=".json,application/json" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = ''; }} />
-      <span role="status">{sessionStatus || 'Keep the session JSON with your video.'}</span>
-    </div>
+    <details className="advanced-tools disclosure" onToggle={e => {
+      if (e.currentTarget.open) return;
+      setLabeling(false); setDraft(null); setInspect(false); setShowBallDebug(false);
+    }}>
+    <summary>Advanced tools</summary>
     <BallLabeler enabled={labeling} onToggle={() => { videoRef.current?.pause(); setLabeling(!labeling); setDraft(null); setInspect(false); onLocate(null); }}
       time={displayedTime} fps={fps} video={metadata} labels={ballLabels} onLabel={saveBallLabel}
       onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek}
@@ -343,7 +354,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     <div className="calibration-controls">
       {localTracking && <label className="recovery-player"><input type="checkbox" checked={refineBallGaps} disabled={ballTracking}
         onChange={e => setRefineBallGaps(e.target.checked)} /> Recover short ball gaps (extra analysis time)</label>}
-      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label><label><input type="checkbox" checked={showBallTrail} disabled={!showBall} onChange={e => setShowBallTrail(e.target.checked)} /> Detection trail</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
+      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBallTrail} disabled={!showBall} onChange={e => setShowBallTrail(e.target.checked)} /> Detection trail</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
@@ -384,14 +395,15 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           setMessage(`Imported player tracks for ${tracks.frames.size} frames.`);
         } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not import player tracks.'); }
       }} />
-      {locatingPlayerId && <div className="workspace-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
-      <div className="workspace-tools"><button disabled={!metadata} onClick={() => seek(-1)}>← Previous frame</button><button disabled={!metadata} onClick={() => seek(1)}>Next frame →</button><label>FPS <input aria-label="Video FPS" type="number" min="1" max="240" value={fps} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 1 && n <= 240) setFps(n); }} /></label></div>
+      <div className="workspace-tools"><label>FPS <input aria-label="Video FPS" type="number" min="1" max="240" value={fps} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 1 && n <= 240) setFps(n); }} /></label></div>
       <p>Frame steps use 1 / FPS seconds. Match FPS to your clip; variable-rate footage may not seek to exact frames.</p>
       <div className="workspace-tools"><button disabled={!metadata} onClick={startCalibration}>{calibration ? 'Recalibrate table' : 'Calibrate table'}</button>{draft !== null && <button onClick={() => { setDraft(null); setMessage(''); }}>Cancel</button>}<button disabled={!calibration || draft !== null} aria-pressed={inspect} onClick={() => { videoRef.current?.pause(); setInspect(!inspect); }}>Inspect table {inspect ? 'on' : 'off'}</button></div>
       <p>{draft !== null ? `Click ${labels[draft.length]}. Order: ${labels.join(' → ')}. Near = end closest to the camera; left/right as seen in the image.` : 'Origin: near-left. x across width (1.525 m); y toward the far end (2.74 m). Recalibrate after camera movement or cuts.'}</p>
       {selected && <output>Table plane: x = {selected.x.toFixed(4)} m, y = {selected.y.toFixed(4)} m</output>}
       <p>Planar mapping applies only to the table surface, not airborne ball positions. Inspector clicks are not ball training labels.</p>
-      <p role="status">{message}</p>
+      <p><a href="/clips/">Trim a YouTube clip ↗</a></p>
     </div>
+    </details>
+    {message && <p className="workspace-message" role="status">{message}</p>}
   </>;
 }

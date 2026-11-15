@@ -29,7 +29,6 @@ function Summary({ windows }: { windows: RecoveryWindow[] }) {
 export function RecoveryReview({ active, rallies, shots, players, onChange, onJump, onReplay, onStep }: Props) {
   const [playerId, setPlayerId] = useState(players[0].id);
   const [shotId, setShotId] = useState<number | null>(null);
-  const [reason, setReason] = useState<RecoveryJudgment['reason']>('feet-hidden');
   const [status, setStatus] = useState('');
   const [baseline, setBaseline] = useState<Session | null>(null);
   const [baselinePlayerId, setBaselinePlayerId] = useState('');
@@ -47,7 +46,7 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
     setStatus('');
     onJump(window.rally, window.shot.time);
   }
-  function judge(outcome: RecoveryOutcome) {
+  function judge(outcome: RecoveryOutcome, reason = selected?.judgment?.reason ?? null) {
     if (!selected) return;
     const judgment = makeRecoveryJudgment(selected, outcome, reason);
     onChange(rallies.map(r => r.id === active.id ? { ...r,
@@ -57,8 +56,8 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
   const automatic = selected && [selected.shot, selected.opponent].some(s => s && (s.source === 'automatic' || s.playerIdentity?.source === 'automatic'));
 
   return <section className="recovery-review" aria-labelledby="recovery-heading">
-    <div className="recovery-heading"><h4 id="recovery-heading">Recovery review</h4><span>YOUR MANUAL JUDGMENT</span></div>
-    <p>Start with 10–20 points from a fixed view with your feet visible. At the opponent’s next contact, were you balanced and ready to move for the next ball?</p>
+    <h4 id="recovery-heading">Recovery review</h4>
+    <p>At the opponent’s next contact, was the player balanced and ready to move?</p>
     <label className="recovery-player">Review player <select value={playerId} onChange={e => { setPlayerId(e.target.value); setShotId(null); setStatus(''); }}>
       {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
     </select></label>
@@ -79,28 +78,25 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
           <button onClick={() => onStep(-1)}>Previous frame</button>
           <button onClick={() => onStep(1)}>Next frame</button>
         </div>
-        <p>Ready = balanced and prepared at their contact. Late = visibly still recovering. Unclear = evidence is missing or you cannot tell. Use the video’s playback controls and frame steps to check.</p>
-        {!selected.opponent && <p>Tag the next opponent contact before choosing ready or late. A point-ending shot may have no next contact; leave it unreviewed or mark unclear.</p>}
+        {!selected.opponent && <p>Tag the next opponent contact to judge readiness, or mark this shot unclear.</p>}
         <div className="workspace-tools" role="group" aria-label="Recovery judgment">
           {(['ready', 'late', 'unclear'] as const).map(outcome => <button key={outcome}
             disabled={outcome !== 'unclear' && !selected.opponent} aria-pressed={selected.judgment?.outcome === outcome}
             onClick={() => judge(outcome)}>{outcome[0].toUpperCase() + outcome.slice(1)}</button>)}
-          <button disabled={!active.recovery?.some(j => j.shot.id === selected.shot.id)} onClick={() => {
+          {active.recovery?.some(j => j.shot.id === selected.shot.id) && <button onClick={() => {
             onChange(rallies.map(r => r.id === active.id ? { ...r, recovery: r.recovery?.filter(j => j.shot.id !== selected.shot.id) } : r));
             setStatus('Judgment cleared.');
-          }}>Clear judgment</button>
+          }}>Clear judgment</button>}
         </div>
-        <label className="recovery-player">Reason for unclear <select value={selected.opponent ? reason ?? 'feet-hidden' : 'missing-contact'} disabled={!selected.opponent} onChange={e => setReason(e.target.value as RecoveryJudgment['reason'])}>
+        {selected.judgment?.outcome === 'unclear' && <label className="recovery-player">Reason for unclear <select value={selected.judgment.reason ?? 'view-uncertain'} disabled={!selected.opponent} onChange={e => judge('unclear', e.target.value as RecoveryJudgment['reason'])}>
           {unclearReasons.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-        </select></label>
-        {selected.judgment?.reason && <p>Saved reason: {unclearReasons.find(r => r.value === selected.judgment?.reason)?.label}. Select a reason, then press Unclear to save it.</p>}
+        </select></label>}
       </div>}
     </>}
     <p role="status">{status}</p>
     <h4>{name} · all saved rallies</h4>
     <Summary windows={windows} />
     {!!stale && <p>{stale} previous judgments excluded because their contact tags or rally range changed. Review the affected shots again.</p>}
-    <p>Counts cover tagged shots in saved rallies, not all returns in the footage. Unclear and unreviewed shots are excluded from the late percentage.</p>
     {!!late.length && <div className="rally-shot-links" aria-label="Late recovery examples"><strong>Jump to late examples</strong>
       {late.map(w => <button className="time-link" key={`${w.rally.id}-${w.shot.id}`} onClick={() => choose(w)}>
         Rally {rallies.indexOf(w.rally) + 1} · {formatVideoTime(w.shot.time)}
@@ -111,7 +107,7 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
         onChange(rallies.map(r => r.id === active.id ? { ...r, focus: 'footwork-recovery', note: cue } : r));
         setStatus('Practice cue saved in this rally. Export JSON to keep it.');
       }} disabled={!!active.note}>Save cue to this rally</button></div>
-      {!!active.note && <p>This rally already has a practice note. You can edit it above.</p>}
+      {!!active.note && <p>Open Rally setup and notes to edit the existing practice note.</p>}
     </div>}
     <details className="recovery-comparison"><summary>Compare with another session</summary>
       <p>Choose an exported session, then select the same person. Use the same readiness definition and comparable camera views. This describes your reviews; it does not establish training effects.</p>
@@ -129,6 +125,5 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
         <Summary windows={recoveryWindows(baseline.rallies ?? [], baseline.shots, baselinePlayerId)} />
       </>}
     </details>
-    <p>Export JSON saves recovery judgments with the session. The comparison file is only opened for this view.</p>
   </section>;
 }

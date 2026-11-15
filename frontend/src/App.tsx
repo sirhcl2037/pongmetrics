@@ -24,6 +24,7 @@ function App() {
   const [stroke, setStroke] = useState<Stroke>("Loop");
   const [currentTime, setCurrentTime] = useState(0);
   const [filter, setFilter] = useState<"All" | Wing>("All");
+  const [showTagging, setShowTagging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -93,30 +94,31 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="./" aria-label="PongMetrics home"><span className="brand-mark" aria-hidden="true">p·</span>Pong<span className="brand-light">Metrics</span></a>
-        <span className="workspace-label">MATCH WORKSPACE</span>
-        <a className="clips-tool-link" href="/clips/">Trim YouTube video ↗</a>
         <span className="session-badge"><i /> Local session</span>
       </header>
       <main>
         <div className="page-heading">
-          <div><p className="eyebrow">YOUR GAME, IN DETAIL</p><h1>Professional Grade Deep Analysis</h1><p className="page-description">Review your match. Tag your shots. Find your patterns.</p></div>
+          <div><h1>Match review</h1><p className="page-description">Replay a rally and see how you recover between shots.</p></div>
           <button className="upload-button" onClick={() => fileRef.current?.click()}><span aria-hidden="true">↑</span> {videoUrl ? 'Change video' : 'Upload match'}</button>
           <input ref={fileRef} className="visually-hidden" type="file" accept="video/*" onChange={uploadVideo} aria-label="Upload match video" />
         </div>
-        <div className="workspace-grid">
-          <section className="panel video-panel" aria-labelledby="video-heading">
-            <div className="panel-heading"><div className="heading-with-dot"><i /><h2 id="video-heading">Match review</h2></div><span className="small-label">{videoUrl ? 'READY TO ANNOTATE' : 'START HERE'}</span></div>
+        <div className={`workspace-grid${videoUrl && showTagging ? ' with-tagging' : ''}`}>
+          <section className="panel video-panel" aria-label="Match video">
+            {videoUrl && <div className="panel-heading video-heading"><h2 className="video-filename" title={videoName}>{videoName}</h2>
+              <button className="secondary-button" aria-expanded={showTagging} aria-controls={showTagging ? 'tag-panel' : undefined} onClick={() => {
+                setShowTagging(!showTagging);
+                if (showTagging) setLocatingPlayerId(null);
+              }}>{showTagging ? 'Hide shot tagging' : 'Tag shots'}</button>
+            </div>}
             {videoUrl && videoFile ? <VideoWorkspace key={videoUrl} url={videoUrl} file={videoFile} videoRef={videoRef} shots={shots} players={players} selectedPlayerId={selectedPlayerId} onPlayers={setPlayers} onSelectPlayer={setSelectedPlayerId} locatingPlayerId={locatingPlayerId} onLocate={setLocatingPlayerId} onShots={imported => { setShots(imported); nextId.current = Math.max(-1, ...imported.map(s => s.id)) + 1; }} onTime={setCurrentTime} /> :
               <button className="upload-stage" onClick={() => fileRef.current?.click()}>
                 <span className="table-illustration" aria-hidden="true"><span className="table-net" /><span className="table-ball" /></span>
-                <span className="upload-title">Bring your game into focus</span>
-                <span className="upload-description">Choose a match video to begin your analysis.</span>
-                <span className="upload-link">Select video <span aria-hidden="true">↗</span></span>
+                <span className="upload-title">Choose a match video</span>
+                <span className="upload-description">Video stays on your device.</span>
               </button>}
-            <div className="video-footer"><span className="video-filename" title={videoName}>{videoName || 'No video selected'}</span><span className="privacy-note">◇ Video stays on your device</span></div>
           </section>
-          <section className="panel annotation-panel" aria-labelledby="annotation-heading">
-            <div className="panel-heading"><h2 id="annotation-heading">Tag a shot</h2><span className="step-badge">01</span></div>
+          {videoUrl && showTagging && <section id="tag-panel" className="panel annotation-panel" aria-labelledby="annotation-heading">
+            <div className="panel-heading"><h2 id="annotation-heading">Tag a shot</h2></div>
             <div className="annotation-body">
               <PlayerSetup players={players} selected={selectedPlayerId} onSelect={setSelectedPlayerId} onChange={setPlayers} enabled={!!videoUrl} autoSwitch={autoSwitchPlayers} onAutoSwitch={setAutoSwitchPlayers} onAssociate={id => { videoRef.current?.pause(); setLocatingPlayerId(id); }} />
               <div className="timestamp"><span className="eyebrow">CURRENT POSITION</span><strong>{timestamp(currentTime)}</strong><span>Tags are saved at this timestamp</span></div>
@@ -126,8 +128,9 @@ function App() {
               <div className="annotation-controls"><button className="wing-button forehand" disabled={!videoUrl} onClick={() => addShot('FH')}><span className="wing-symbol">FH</span> Forehand <span aria-hidden="true">+</span></button><button className="wing-button backhand" disabled={!videoUrl} onClick={() => addShot('BH')}><span className="wing-symbol">BH</span> Backhand <span aria-hidden="true">+</span></button></div>
               <p className="annotation-hint">{videoUrl ? stroke === 'Serve' ? 'Pause at racket–ball contact, select the server, then tag Forehand or Backhand.' : 'Pause at contact, select a stroke, then tag the wing.' : 'Upload a video to start tagging shots.'}</p>
             </div>
-          </section>
+          </section>}
         </div>
+        {videoUrl && <details className="panel shot-history disclosure"><summary>Shot timeline and statistics · {shots.length} tagged</summary>
         <section className="stats-grid" aria-label="Session statistics">
           <div className="stat-card"><span>Total shots</span><strong>{shots.length.toString().padStart(2, '0')}</strong><small>Tagged this session</small></div>
           <div className="stat-card"><span><i className="legend-dot fh-dot" /> Forehands</span><strong>{forehands.toString().padStart(2, '0')}</strong><small>{shots.length ? `${usage.toFixed(0)}% of all shots` : 'Waiting for your first shot'}</small></div>
@@ -139,6 +142,7 @@ function App() {
           {visibleShots.length ? <div className="shot-list"><div className="shot-table-heading"><span>SHOT</span><span>TIMESTAMP</span><span>WING</span><span>STROKE</span><span /></div>{visibleShots.map(shot => <div className="shot-entry" key={shot.id}><span className="shot-number">#{(shots.indexOf(shot) + 1).toString().padStart(2, '0')}</span><button className="time-link" onClick={() => jumpTo(shot.time)} aria-label={`Jump to ${timestamp(shot.time)}`}><span aria-hidden="true">▷</span> {timestamp(shot.time)}</button><span className={`wing-tag ${shot.wing === 'FH' ? 'fh-tag' : 'bh-tag'}`}>{shot.wing === 'FH' ? 'Forehand' : 'Backhand'}</span><span className="stroke-name">{shot.stroke}<br /><small>{players.find(p => p.id === shot.playerId)?.name ?? 'Unassigned'}</small></span><button className="remove-button" onClick={() => removeShot(shot.id)} aria-label={`Remove shot ${shots.indexOf(shot) + 1}`} title="Remove shot">×</button></div>)}</div> : <div className="timeline-empty"><span className="empty-icon" aria-hidden="true">≡</span><h3>{shots.length ? 'No shots in this view' : 'Your rally starts here'}</h3><p>{shots.length ? 'Try a different wing filter to see your tagged shots.' : 'Tagged shots appear here. Click a timestamp to revisit the moment.'}</p></div>}
           <div className="timeline-footer"><span>{visibleShots.length} {visibleShots.length === 1 ? 'shot' : 'shots'} shown</span><span>Export JSON to save annotations before changing videos or reloading.</span></div>
         </section>
+        </details>}
         <footer className="page-footer"><span>PONGMETRICS</span><span className="build-version" title={`Commit ${__BUILD_INFO__.commit}${__BUILD_INFO__.dirty ? ' · uncommitted changes included' : ''}`}>
           Build {__BUILD_INFO__.commit.slice(0, 8)}{__BUILD_INFO__.dirty ? '-local' : ''}
           <time dateTime={__BUILD_INFO__.builtAt}>{__BUILD_INFO__.builtAt.slice(0, 19).replace('T', ' ')} UTC</time>

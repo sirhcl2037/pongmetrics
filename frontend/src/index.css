@@ -59,7 +59,18 @@
 .rally-note { grid-column: 1 / -1; }
 .rally-note textarea { resize: vertical; }
 .rally-shot-links { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; margin-top: 7px; font-size: 12px; color: #bdabb3; }
-.session-tools { padding: 0 22px 14px; }
+.session-tools, .review-frame-tools { padding: 12px 22px; }
+.session-tools { border-bottom: 1px solid #342d30; }
+.review-frame-tools input[type=checkbox] { width: auto; margin: 0 5px 0 0; }
+.workspace-message { padding: 12px 22px; font-size: 12px; color: #efdae4; }
+.disclosure > summary { cursor: pointer; color: #dfcdd5; font-size: 13px; font-weight: 600; }
+.disclosure > summary:focus-visible { outline: 2px solid #ef6565; outline-offset: 3px; }
+.advanced-tools { border-top: 1px solid #342d30; }
+.advanced-tools > summary, .shot-history > summary { padding: 15px 22px; }
+.shot-history { margin-top: 16px; }
+.shot-history .stats-grid, .shot-history .timeline-panel { margin: 0 16px 16px; }
+.rally-details { border-top: 1px solid #342d30; margin-top: 14px; padding-top: 12px; }
+.rally-details .rally-actions { margin-bottom: 8px; }
 .recovery-review { margin-top: 18px; padding-top: 16px; border-top: 1px solid #58464f; }
 .recovery-review h4 { margin: 10px 0; font-size: 14px; }
 .recovery-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
@@ -95,7 +106,10 @@ h1 { font-size: clamp(27px, 3vw, 37px); line-height: 1.35; letter-spacing: -1.4p
 .upload-button:hover { background: #f45a5a; border-color: #f45a5a; }
 .upload-button > span { font-size: 21px; line-height: 1; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-.workspace-grid { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 22px; }
+.workspace-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 22px; align-items: start; }
+.workspace-grid.with-tagging { grid-template-columns: minmax(0,1fr) 340px; }
+.video-heading { min-height: 52px; }
+.secondary-button { background: #2b2529; color: #efdae4; border: 1px solid #58464f; border-radius: 6px; padding: 8px 12px; font-size: 12px; }
 .panel { border: 1px solid #342d30; background: #1c181b; border-radius: 12px; overflow: hidden; }
 .video-panel { overflow: clip; }
 .video-stage.pinned-review-video { position: sticky; top: 0; z-index: 5; min-height: 0; }
@@ -185,7 +199,8 @@ h2 { font-size: 14px; font-weight: 600; letter-spacing: -.1px; }
   .upload-stage, .video-stage { min-height: 375px; }
 }
 @media (max-width:1050px) {
-  .workspace-grid { grid-template-columns: minmax(0,1fr) 310px; gap: 16px; }
+  .workspace-grid { gap: 16px; }
+  .workspace-grid.with-tagging { grid-template-columns: minmax(0,1fr) 310px; }
   .annotation-body { padding: 18px; }
   .annotation-controls { grid-template-columns: 1fr; }
   .wing-button { min-height: 39px; }
@@ -201,7 +216,7 @@ h2 { font-size: 14px; font-weight: 600; letter-spacing: -.1px; }
   .page-heading { align-items: flex-start; flex-wrap: wrap; margin-bottom: 23px; gap: 20px; }
   h1 { font-size: 28px; }.page-description { font-size: 12px; }.eyebrow { font-size: 9px; }
   .upload-button { padding: 10px 14px; font-size: 12px; }
-  .workspace-grid { grid-template-columns: 1fr; }
+  .workspace-grid.with-tagging { grid-template-columns: minmax(0,1fr); }
   .upload-stage, .video-stage { min-height: 290px; }
   .annotation-controls { grid-template-columns: 1fr 1fr; }
   .annotation-body { padding: 20px; }.timestamp { padding: 14px; }.timestamp strong { font-size: 28px; }

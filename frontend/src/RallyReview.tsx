@@ -126,10 +126,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
   const focusCounts = rallyFocusOptions.map(option => ({
     label: option.label, count: rallies.filter(rally => rally.focus === option.value).length,
   })).filter(option => option.count > 0).sort((a, b) => b.count - a.count);
-  return <section className="rally-review" aria-labelledby="rally-review-heading">
-    <h3 id="rally-review-heading">Rally review</h3>
-    <p>Mark the start and end of a point, then replay it and record one thing to work on.</p>
-    <div className="workspace-tools">
+  const rangeControls = <div className="workspace-tools">
       <button disabled={!duration} onClick={() => markBoundary('start')}>Mark start</button>
       <button disabled={!duration} onClick={() => markBoundary('end')}>Mark end</button>
       {(draft.start !== undefined || draft.end !== undefined) && <span className="rally-range" aria-live="polite">
@@ -139,13 +136,12 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
       </span>}
       <button disabled={!range || !!rangeError} onClick={saveRally}>{draft.id ? 'Save range' : 'Save rally'}</button>
       {(draft.start !== undefined || draft.end !== undefined) && <button onClick={() => { setDraft({}); setMessage(''); }}>Clear marks</button>}
-    </div>
+    </div>;
+  return <section className="rally-review" aria-labelledby="rally-review-heading">
+    <h3 id="rally-review-heading">Rally review</h3>
+    {!active && <><p>Mark the start and end of a point to save a rally.</p>{rangeControls}</>}
     {(rangeError || message) && <p role="status">{rangeError || message}</p>}
     {active && <>
-      <label className="recovery-player"><input type="checkbox" checked={pinVideo} onChange={e => onPinVideo(e.target.checked)} /> Keep video visible while reviewing</label>
-      <p>{rallies.length} saved {rallies.length === 1 ? 'rally' : 'rallies'} · {players.map(player =>
-        `${player.name} won ${rallies.filter(rally => rally.winnerId === player.id).length}`).join(' · ')} · {unscored} unscored</p>
-      {!!focusCounts.length && <p>{focusCounts.map(option => `${option.label} ${option.count}`).join(' · ')}</p>}
       <ol className="rally-list" aria-label="Saved rallies">
         {rallies.map((rally, index) => <li key={rally.id}>
           <button aria-pressed={rally.id === active.id} onClick={() => { setSelectedId(rally.id); jumpTo(rally.start); }}>
@@ -155,6 +151,14 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
       </ol>
       <div className="workspace-tools rally-actions">
         <button onClick={() => void replayRally(active)}>Replay rally</button>
+      </div>
+      <RecoveryReview active={active} rallies={rallies} shots={shots} players={players} onChange={onChange} onStep={onStep}
+        onJump={(rally, time) => { setSelectedId(rally.id); jumpTo(time); }}
+        onReplay={(rally, start, end) => void replayRally({ id: rally.id, start, end })} />
+      <details className="rally-details disclosure">
+      <summary>Rally setup and notes</summary>
+      <label className="recovery-player"><input type="checkbox" checked={pinVideo} onChange={e => onPinVideo(e.target.checked)} /> Keep video visible while reviewing</label>
+      <div className="workspace-tools rally-actions">
         <button onClick={() => { setDraft({ id: active.id, start: active.start, end: active.end }); setMessage(''); }}>Edit range</button>
         <button onClick={() => {
           onChange(rallies.filter(rally => rally.id !== active.id));
@@ -162,6 +166,9 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
           setMessage('Rally removed.');
         }}>Remove rally</button>
       </div>
+      {rangeControls}
+      <p>{players.map(player => `${player.name} won ${rallies.filter(rally => rally.winnerId === player.id).length}`).join(' · ')} · {unscored} unscored</p>
+      {!!focusCounts.length && <p>{focusCounts.map(option => `${option.label} ${option.count}`).join(' · ')}</p>}
       <div className="rally-fields">
         <label>Point winner
           <select value={active.winnerId ?? ''} onChange={event => updateRally({ winnerId: event.target.value || null })}>
@@ -185,9 +192,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
           {formatVideoTime(shot.time)} · {players.find(player => player.id === shot.playerId)?.name ?? 'Unassigned'} · {shot.wing} {shot.stroke}
         </button>)}
       </div>}
-      <RecoveryReview active={active} rallies={rallies} shots={shots} players={players} onChange={onChange} onStep={onStep}
-        onJump={(rally, time) => { setSelectedId(rally.id); jumpTo(time); }}
-        onReplay={(rally, start, end) => void replayRally({ id: rally.id, start, end })} />
+      </details>
     </>}
   </section>;
 }
