@@ -23,13 +23,13 @@ Local video annotation and offline player/ball tracking are implemented. See [te
 
 ## Review a match
 
-Upload a match and use **Mark start**, **Mark end**, and **Save rally** below the video. Select a rally to jump to it, replay the marked range, and open any tagged shots inside it. Record the point winner and one training focus or cue. The focus totals show which themes recur across the rallies you reviewed.
+Upload a match and use **Mark start**, **Mark end**, and **Save rally** below the video. Select **Tag shots** to name the players and mark both players' contacts. Use **Rally setup and notes** to add another rally, adjust a range, or record a practice cue.
 
 Use **Export JSON** to save the review alongside the original video. Upload that video and **Import JSON** to resume. Rally review works with the video alone.
 
 ## Review recovery
 
-Start with 10–20 points from a fixed view with your feet visible. Name both players, tag their contacts, and save each rally. In **Recovery review**, select yourself and a shot. **Replay recovery** plays from your contact through the next tagged opponent contact; **Opponent contact** jumps to the decision frame. Record **Ready**, **Late**, or **Unclear** (with a reason). Ready means balanced and prepared to move at the opponent’s contact; late means visibly still recovering.
+Start with one point from a fixed view with your feet visible. Name both players, tag their contacts, and save the rally. In **Recovery review**, select yourself and a shot. **Replay recovery** plays at half speed and freezes at the next tagged opponent contact. **Opponent contact** jumps straight to that frame. Record **Ready** if you were balanced and prepared to move, **Late** if you were still recovering, or **Unclear** if you cannot tell. Once the flow works on your first point, review a batch of 10–20 points.
 
 Judgments are manual, even when the contact tags came from an automatic source. Missing, unassigned, repeated-player, or simultaneous contacts never form a guessed recovery window. Tag corrections invalidate affected judgments without erasing their saved snapshots. The summary excludes unclear and unreviewed cases from the late percentage and reports missing contacts separately. It covers tagged shots in saved rallies, not all returns in the video.
 

@@ -17,10 +17,18 @@ type Props = {
   onPinVideo: (pin: boolean) => void;
 };
 
-function stopAtRallyEnd(video: HTMLVideoElement, replay: RefObject<RallyRange | null>) {
+type Replay = RallyRange & { id: string; previousRate: number | null };
+
+function clearReplay(video: HTMLVideoElement, replay: RefObject<Replay | null>) {
+  const current = replay.current;
+  replay.current = null;
+  if (current?.previousRate != null) video.playbackRate = current.previousRate;
+}
+
+function stopAtRallyEnd(video: HTMLVideoElement, replay: RefObject<Replay | null>) {
   const range = replay.current;
   if (!range || video.seeking || video.currentTime < range.end) return;
-  replay.current = null;
+  clearReplay(video, replay);
   video.pause();
   video.currentTime = range.end;
 }
@@ -29,7 +37,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
   const [draft, setDraft] = useState<Partial<RallyRange> & { id?: string }>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const replay = useRef<(RallyRange & { id: string }) | null>(null);
+  const replay = useRef<Replay | null>(null);
   const active = rallies.find(rally => rally.id === selectedId) ?? rallies[0];
   const range = draft.start !== undefined && draft.end !== undefined ? { start: draft.start, end: draft.end } : null;
   const rangeError = range ? rallyRangeError(range, duration, rallies, draft.id) : '';
@@ -40,17 +48,19 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
     const video = videoRef.current;
     if (!video) return;
     const progress = () => stopAtRallyEnd(video, replay);
-    const pause = () => { if (video.paused) replay.current = null; };
+    const pause = () => { if (video.paused) clearReplay(video, replay); };
     const seek = () => {
-      if (replay.current && Math.abs(video.currentTime - replay.current.start) > .001) replay.current = null;
+      if (replay.current && Math.abs(video.currentTime - replay.current.start) > .001) clearReplay(video, replay);
     };
     video.addEventListener('timeupdate', progress);
     video.addEventListener('pause', pause);
+    video.addEventListener('ended', pause);
     video.addEventListener('seeking', seek);
     return () => {
-      replay.current = null;
+      clearReplay(video, replay);
       video.removeEventListener('timeupdate', progress);
       video.removeEventListener('pause', pause);
+      video.removeEventListener('ended', pause);
       video.removeEventListener('seeking', seek);
     };
   }, [videoRef]);
@@ -62,16 +72,17 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
 
   useEffect(() => {
     const playing = replay.current;
-    if (playing && !rallies.some(rally => rally.id === playing.id && rally.start <= playing.start && rally.end >= playing.end)) {
-      replay.current = null;
-      videoRef.current?.pause();
+    const video = videoRef.current;
+    if (video && playing && !rallies.some(rally => rally.id === playing.id && rally.start <= playing.start && rally.end >= playing.end)) {
+      clearReplay(video, replay);
+      video.pause();
     }
   }, [rallies, videoRef]);
 
   function markBoundary(boundary: keyof RallyRange) {
     const video = videoRef.current;
     if (!video) return;
-    replay.current = null;
+    clearReplay(video, replay);
     video.pause();
     if (video.seeking || video.readyState < 2 || Math.abs(video.currentTime - displayedTime) > .1) {
       setMessage('Wait for the frame to load, then mark it.');
@@ -103,22 +114,25 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
   function jumpTo(time: number) {
     const video = videoRef.current;
     if (!video) return;
-    replay.current = null;
+    clearReplay(video, replay);
     video.pause();
     video.currentTime = time;
   }
 
-  async function replayRally(rally: RallyRange & { id: string }) {
+  async function replayRally(rally: RallyRange & { id: string }, slow = false) {
     const video = videoRef.current;
     if (!video) return;
     setMessage('');
-    replay.current = rally;
+    clearReplay(video, replay);
+    const playing = { ...rally, previousRate: slow ? video.playbackRate : null };
+    if (slow) video.playbackRate = .5;
+    replay.current = playing;
     video.currentTime = rally.start;
     try { await video.play(); }
     catch {
-      if (replay.current !== rally) return;
-      replay.current = null;
-      setMessage('Playback could not start. Try Replay rally again.');
+      if (replay.current !== playing) return;
+      clearReplay(video, replay);
+      setMessage('Playback could not start. Try replay again.');
     }
   }
 
@@ -154,7 +168,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
       </div>
       <RecoveryReview active={active} rallies={rallies} shots={shots} players={players} onChange={onChange} onStep={onStep}
         onJump={(rally, time) => { setSelectedId(rally.id); jumpTo(time); }}
-        onReplay={(rally, start, end) => void replayRally({ id: rally.id, start, end })} />
+        onReplay={(rally, start, end) => void replayRally({ id: rally.id, start, end }, true)} />
       <details className="rally-details disclosure">
       <summary>Rally setup and notes</summary>
       <label className="recovery-player"><input type="checkbox" checked={pinVideo} onChange={e => onPinVideo(e.target.checked)} /> Keep video visible while reviewing</label>

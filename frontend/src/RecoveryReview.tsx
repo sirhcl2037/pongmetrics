@@ -57,7 +57,6 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
 
   return <section className="recovery-review" aria-labelledby="recovery-heading">
     <h4 id="recovery-heading">Recovery review</h4>
-    <p>At the opponent’s next contact, was the player balanced and ready to move?</p>
     <label className="recovery-player">Review player <select value={playerId} onChange={e => { setPlayerId(e.target.value); setShotId(null); setStatus(''); }}>
       {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
     </select></label>
@@ -72,13 +71,14 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
           ` → ${players.find(p => p.id === selected.opponent!.playerId)?.name} at ${formatVideoTime(selected.opponent.time)}` : ' → next opponent contact missing or ambiguous'}</p>
         {automatic && <p>One or both contact tags or player assignments are automatic. Check them in the video before judging. Your judgment stays manual.</p>}
         <div className="workspace-tools">
-          <button disabled={!selected.opponent} onClick={() => onReplay(active, selected.shot.time, selected.opponent!.time)}>Replay recovery</button>
+          <button disabled={!selected.opponent} onClick={() => onReplay(active, selected.shot.time, selected.opponent!.time)}>Replay recovery · ½ speed</button>
           <button onClick={() => onJump(active, selected.shot.time)}>My contact</button>
           <button disabled={!selected.opponent} onClick={() => onJump(active, selected.opponent!.time)}>Opponent contact</button>
           <button onClick={() => onStep(-1)}>Previous frame</button>
           <button onClick={() => onStep(1)}>Next frame</button>
         </div>
-        {!selected.opponent && <p>Tag the next opponent contact to judge readiness, or mark this shot unclear.</p>}
+        {selected.opponent ? <p><strong>Ready for the next ball?</strong> Check the player’s balance when the opponent hits.</p>
+          : <p>Tag the next opponent contact to judge readiness, or mark this shot unclear.</p>}
         <div className="workspace-tools" role="group" aria-label="Recovery judgment">
           {(['ready', 'late', 'unclear'] as const).map(outcome => <button key={outcome}
             disabled={outcome !== 'unclear' && !selected.opponent} aria-pressed={selected.judgment?.outcome === outcome}
