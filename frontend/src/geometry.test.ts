@@ -181,12 +181,50 @@ test('player axis favors longitudinal reversals over cross-axis bounces in diffe
   assert.equal(playerAxisEvidence([...pair,person(3,.5,.1)],[30,0],[-30,0]),null);
   assert.equal(playerAxisEvidence([pair[0]],[30,0],[-30,0]),null);
   assert.equal(playerAxisEvidence([pair[0],{...pair[0],trackId:2}],[30,0],[-30,0]),null);
-  const observations=[.3,.4,.5,.4,.3].map((x,i) => ({timestamp:i/25,position:{value:{x,y:.45},source:'automatic' as const,confidence:.9}}));
+  const observations=[.5,.6,.7,.6,.5].map((x,i) => ({timestamp:i/25,position:{value:{x,y:.45},source:'automatic' as const,confidence:.9}}));
   const tracks:PlayerTracks={fps:25,firstTimestamp:0,frames:new Map([[2,pair]])};
   const candidate=detectShotCandidates(observations,25,.5,tracks)[0];
-  assert.ok(candidate.contactScore !== null && candidate.contactScore>=.79);
+  assert.ok(candidate.contactScore !== null && candidate.contactScore>=.89);
+  assert.equal(candidate.trackId,2);
   assert.ok(candidate.playerAxis?.reverses);
   assert.equal(detectShotCandidates(observations,25,.5,{...tracks,frames:new Map([[1,pair]])})[0].playerAxis,null);
+});
+
+test('contacts across short ball gaps require plausible flight and a matched player at the turn', () => {
+  const points = [0, 1, 5, 6].map((frame,i) => ({
+    timestamp: frame / 50, position: {value:{x:[.5,.55,.55,.5][i],y:.46},source:'automatic' as const,confidence:.9},
+  }));
+  const left = {trackId:7,playerId:null,box:{x:.15,y:.36,width:.15,height:.2}};
+  const right = {trackId:8,playerId:null,box:{x:.64,y:.36,width:.15,height:.2}};
+  const ids = new Set([7,8]);
+  const tracks:PlayerTracks = {fps:50,firstTimestamp:.06,frames:new Map([[3,[left,right]]])};
+  const [candidate] = detectShotCandidates(points,50,.5,tracks,ids);
+  assert.equal(candidate.evidence,'short-ball-gap');
+  assert.equal(candidate.trackId,8);
+  assert.ok(Math.abs(candidate.timestamp-.06)<1e-9);
+  assert.ok(Math.abs(candidate.position.x-.65)<1e-9);
+  assert.equal(candidate.gap?.start,.02);
+  assert.equal(candidate.gap?.end,.1);
+  assert.equal(points.length,4); // No new position has been added to the ball track.
+  assert.deepEqual(detectShotCandidates(points,50,.5,tracks),[]);
+  assert.deepEqual(detectShotCandidates(points,50,.5,tracks,new Set([8])),[]);
+  for (const people of [[left], [left,right,{...right,trackId:7}], [left,{...right,box:{...right.box,y:.75}}]]) {
+    assert.deepEqual(detectShotCandidates(points,50,.5,{...tracks,frames:new Map([[3,people]])},ids),[]);
+  }
+  assert.deepEqual(detectShotCandidates(points.map((p,i) => i >= 2 ? {...p,timestamp:p.timestamp+.21} : p),50,.5,tracks,ids),[]);
+  assert.deepEqual(detectShotCandidates(points.map((p,i) => i >= 2 ? {...p,position:{...p.position,value:{...p.position.value,y:.65}}} : p),50,.5,tracks,ids),[]);
+});
+
+test('a visible turn beyond both players is rejected even if a pose reports a wrist there', () => {
+  const observations = [.3,.4,.5,.4,.3].map((x, i) => ({
+    timestamp:i / 25,position:{value:{x,y:.45},source:'automatic' as const,confidence:.9},
+  }));
+  const left = {trackId:7,playerId:null,box:{x:.15,y:.35,width:.12,height:.2}};
+  const wrist = {name:'left-wrist' as const,position:{value:{x:.5,y:.45},source:'automatic' as const,confidence:.99}};
+  const right = {trackId:8,playerId:null,box:{x:.75,y:.35,width:.12,height:.2},landmarks:[wrist]};
+  const tracks:PlayerTracks = {fps:25,firstTimestamp:.08,frames:new Map([[2,[left,right]]])};
+  assert.deepEqual(detectShotCandidates(observations,25,.5,tracks,new Set([7,8])),[]);
+  assert.equal(detectShotCandidates(observations,25,.5)[0].trackId,null);
 });
 
 test('shot-level matching is one-to-one and maximizes matches before minimizing timing error', () => {
@@ -276,6 +314,8 @@ test('session roundtrip preserves provenance and rejects malformed data', () => 
   assert.deepEqual(migrated.players,defaultPlayers());
   const assigned = { ...migrated, shots: [{ ...migrated.shots[0], playerId:'player-2', playerIdentity:{value:'player-2',source:'automatic',confidence:.9} }] };
   assert.deepEqual(parseSession(JSON.stringify(assigned)),assigned);
+  assert.equal(parseSession(JSON.stringify({...assigned,ballMinimumScore:.15})).ballMinimumScore,.15);
+  assert.throws(() => parseSession(JSON.stringify({...assigned,ballMinimumScore:1.2})));
   for(const wing of ['FH','BH'] as const) {
     const serve={...assigned,shots:[{...assigned.shots[0],wing,stroke:'Serve'}]};
     assert.deepEqual(parseSession(JSON.stringify(serve)),serve);

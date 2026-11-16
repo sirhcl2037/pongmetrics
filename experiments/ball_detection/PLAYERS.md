@@ -30,7 +30,9 @@ The local Vite app (`npm run dev` or `npm run preview` in `frontend`) generates 
 
 **Import player tracks** also accepts an existing `output/players.json` for the matching source video. **Jump to player tracks** seeks to the start of the tracked segment.
 
-The playing-area filter checks box centers within normalized `--roi LEFT TOP RIGHT BOTTOM` (default `.15 .05 .85 .95`). Tune it for another camera angle to exclude officials and spectators. It filters output eligibility; the detector still sees the full frame. When exactly two eligible people first appear, the upper one is labeled `far-player` and the lower one `near-player`. These initial labels stay attached to their track IDs; they are not verified player names. New IDs are unassigned and flagged for review rather than silently inheriting identity. `missingPlayers` and `needsReview` expose gaps and ambiguity. No positions are interpolated or carried through missing frames.
+The playing-area filter checks box centers within normalized `--roi LEFT TOP RIGHT BOTTOM` (default `0 .05 1 .95`). Tune it for another camera angle to exclude officials and spectators. It filters output eligibility; the detector still sees the full frame. When exactly two eligible people first appear, the upper one is labeled `far-player` and the lower one `near-player`. Locate both players to attach names to their track IDs. New IDs remain unassigned. `missingPlayers` and `needsReview` expose gaps and ambiguity.
+
+In the 764-frame 4K development clip, retaining full image width increased retained boxes for the active left player's ID (3) from 548 to 593 and for the right player's ID (4) from 433 to 593. The detector inputs and IDs were unchanged. The older ROI discarded the right player's boxes at the 9.20 s and 10.15 s contacts, where the player was still on screen.
 
 Coordinates are normalized to the original video. `box` gives x/y/width/height; `center` is the box center. `groundProxy` is the box bottom center, **not measured feet or a metric court position**. Arms/rackets can extend outside the box. Person boxes should inform ball tracking, not exclude ball detections inside them.
 

@@ -4,6 +4,7 @@ import type { ShotCandidate } from './shotDetection.ts';
 
 export type ReviewInterval = {start:number;end:number};
 export type ShotEvidence = {shotId:number;time:number;candidateTime:number|null;timingErrorSeconds:number|null;
+  candidateGap:ShotCandidate['gap']|null;
   ballBefore:number;ballAfter:number;ballContextAvailable:boolean;trackId:number|null;
   playerAttribution:'correct'|'incorrect'|'unknown';
   movement:{bodyWidths:number;seconds:number;sampleCoverage:number}|null;limitations:string[]};
@@ -57,12 +58,24 @@ export function analyzeReviewedShots(shots:Shot[], candidates:ShotCandidate[], o
   const matches=matchContacts(refs,scoped,tolerance), byShot=new Map(matches.map(m=>[m.shot.id,m.candidate]));
   const matchedCandidates=new Set(matches.map(m=>m.candidate));
   const unmatched=scoped.filter(c=>!matchedCandidates.has(c) && c.timestamp>=interval.start && c.timestamp<=interval.end);
+  const eligible = observations.filter(o => o.timestamp >= interval.start - tolerance - 1e-9 &&
+    o.timestamp <= interval.end + tolerance + 1e-9 && (o.position.confidence ?? 1) >= threshold)
+    .sort((a, b) => a.timestamp - b.timestamp);
+  let firstNearby = 0;
   const details:ShotEvidence[]=refs.map(shot=>{
     const candidate=byShot.get(shot.id), limitations:string[]=[];
-    const near=[...new Map(observations.filter(o=>Math.abs(o.timestamp-shot.time)<=.12+1e-9 && (o.position.confidence??1)>=threshold)
-      .map(o=>[Math.round(o.timestamp*fps),o])).values()];
-    const before=near.filter(o=>o.timestamp<shot.time-1e-6), after=near.filter(o=>o.timestamp>shot.time+1e-6);
-    const ballContextAvailable=before.length>=2 && after.length>=2;
+    while (firstNearby < eligible.length && eligible[firstNearby].timestamp < shot.time - tolerance - 1e-9) firstNearby++;
+    const frames = new Map<number, number>();
+    for (let i = firstNearby; i < eligible.length && eligible[i].timestamp <= shot.time + tolerance + 1e-9; i++) {
+      const time = eligible[i].timestamp;
+      frames.set(Math.round(time * fps), time);
+    }
+    let ballBefore = 0, ballAfter = 0;
+    for (const time of frames.values()) {
+      if (time < shot.time - 1e-6) ballBefore++;
+      if (time > shot.time + 1e-6) ballAfter++;
+    }
+    const ballContextAvailable=ballBefore>=2 && ballAfter>=2;
     const trackId=shot.playerId && shot.playerIdentity?.source!=='automatic' ? playerTrackIds.get(shot.playerId)??null : null;
     const playerAttribution=trackId!==null && candidate?.trackId!==null && candidate?.trackId!==undefined ?
       trackId===candidate.trackId?'correct':'incorrect':'unknown';
@@ -74,13 +87,14 @@ export function analyzeReviewedShots(shots:Shot[], candidates:ShotCandidate[], o
     if(!fixedCamera) limitations.push('Confirm a continuous fixed-camera view before comparing screen movement.');
     else if(!movement) limitations.push('Insufficient continuous player observations in the following 0.3 seconds.');
     limitations.push('Stroke mechanics, power and tactical quality are not validated by these measurements.');
-    return {shotId:shot.id,time:shot.time,candidateTime:candidate?.timestamp??null,
-      timingErrorSeconds:candidate?candidate.timestamp-shot.time:null,ballBefore:before.length,ballAfter:after.length,
+    return {shotId:shot.id,time:shot.time,candidateTime:candidate?.timestamp??null,candidateGap:candidate?.gap??null,
+      timingErrorSeconds:candidate?candidate.timestamp-shot.time:null,ballBefore,ballAfter,
       ballContextAvailable,trackId,playerAttribution,movement,limitations};
   });
   const predictionCount=matches.length+unmatched.length;
   return {method:'reviewed-shot-evidence-v1',interval,timingToleranceSeconds:tolerance,referenceShots:refs.length,
     matchedContacts:matches.length,missedContacts:refs.length-matches.length,unmatchedSuggestions:unmatched.map(c=>c.timestamp),
     contactRecall:refs.length?matches.length/refs.length:null,contactPrecision:predictionCount?matches.length/predictionCount:null,
+    meanAbsoluteTimingErrorSeconds:matches.length ? matches.reduce((sum, match) => sum + Math.abs(match.candidate.timestamp - match.shot.time), 0) / matches.length : null,
     ballContextShots:details.filter(d=>d.ballContextAvailable).length,movementMeasuredShots:details.filter(d=>d.movement!==null).length,details};
 }

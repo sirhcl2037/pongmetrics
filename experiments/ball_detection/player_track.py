@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
+DEFAULT_ROI = (0., .05, 1., .95)
 KEYPOINT_NAMES = ['nose', 'left-eye', 'right-eye', 'left-ear', 'right-ear',
                   'left-shoulder', 'right-shoulder', 'left-elbow', 'right-elbow',
                   'left-wrist', 'right-wrist', 'left-hip', 'right-hip',
@@ -56,7 +57,7 @@ class CachedPlayerTracks:
 
 class PersonTracker:
     """One instance per continuous shot; IDs reset when the camera cuts."""
-    def __init__(self, weights, imgsz=416, confidence=.1, roi=(.15,.05,.85,.95), tracker=str(ROOT/'players-bytetrack.yaml')):
+    def __init__(self, weights, imgsz=416, confidence=.1, roi=DEFAULT_ROI, tracker=str(ROOT/'players-bytetrack.yaml')):
         import torch
         from ultralytics import YOLO
         torch.set_num_threads(4)
@@ -104,7 +105,7 @@ def main():
     p.add_argument('--stride', type=int, default=1, help='Detect on every Nth source frame, starting with the first frame in the segment')
     p.add_argument('--confidence', type=float, default=.1, help='Low threshold retains ByteTrack rescue detections')
     p.add_argument('--tracker', default=str(ROOT/'players-bytetrack.yaml'), help='Built-in name or custom tracker YAML')
-    p.add_argument('--roi', nargs=4, type=float, default=(.15,.05,.85,.95), metavar=('LEFT','TOP','RIGHT','BOTTOM'), help='Normalized box-center eligibility region; tune to exclude officials/spectators')
+    p.add_argument('--roi', nargs=4, type=float, default=DEFAULT_ROI, metavar=('LEFT','TOP','RIGHT','BOTTOM'), help='Normalized box-center eligibility region; tune to exclude officials/spectators')
     p.add_argument('--start', type=float, default=2)
     p.add_argument('--end', type=float, default=8.28)
     p.add_argument('--output', type=Path, default=ROOT/'output'/'players.json')

@@ -36,6 +36,7 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
   const windows = recoveryWindows(rallies, shots, playerId);
   const current = windows.filter(w => w.rally.id === active.id);
   const selected = current.find(w => w.shot.id === shotId) ?? current[0];
+  const next = windows.find(w => w.opponent && !w.judgment);
   const late = windows.filter(w => w.judgment?.outcome === 'late');
   const stale = rallies.flatMap(r => (r.recovery ?? []).filter(j => j.shot.playerId === playerId &&
     !windows.some(w => w.rally.id === r.id && w.judgment === j))).length;
@@ -56,10 +57,24 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
   const automatic = selected && [selected.shot, selected.opponent].some(s => s && (s.source === 'automatic' || s.playerIdentity?.source === 'automatic'));
 
   return <section className="recovery-review" aria-labelledby="recovery-heading">
-    <h4 id="recovery-heading">Recovery review</h4>
-    <label className="recovery-player">Review player <select value={playerId} onChange={e => { setPlayerId(e.target.value); setShotId(null); setStatus(''); }}>
-      {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-    </select></label>
+    <h4 id="recovery-heading">Coach</h4>
+    <div className="workspace-tools">
+      <label className="recovery-player">Review player <select value={playerId} onChange={e => { setPlayerId(e.target.value); setShotId(null); setStatus(''); }}>
+        {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select></label>
+      {next?.opponent && <button onClick={() => {
+        choose(next);
+        onReplay(next.rally, next.shot.time, next.opponent!.time);
+      }}>Review next recovery</button>}
+    </div>
+    {late.length >= 2 && <div className="recovery-cue">
+      <p><strong>Practice focus · Late recovery in {late.length} shots</strong></p>
+      <p>{cue}</p>
+      <div className="workspace-tools"><button onClick={() => {
+        onChange(rallies.map(r => r.id === active.id ? { ...r, focus: 'footwork-recovery', note: cue } : r));
+        setStatus('Practice cue saved in this rally. Export JSON to keep it.');
+      }} disabled={!!active.note}>Save cue to this rally</button></div>
+    </div>}
     {!current.length ? <p>Tag {name}’s shots and the opponent’s contacts in this rally using the shot controls. Recovery review uses those timestamps; tracking is optional.</p> : <>
       <ol className="rally-list" aria-label="Recovery shots in this rally">
         {current.map(w => <li key={w.shot.id}><button aria-pressed={w.shot.id === selected?.shot.id} onClick={() => choose(w)}>
@@ -68,7 +83,7 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
       </ol>
       {selected && <div className="recovery-card">
         <p><strong>{name} at {formatVideoTime(selected.shot.time)}</strong>{selected.opponent ?
-          ` → ${players.find(p => p.id === selected.opponent!.playerId)?.name} at ${formatVideoTime(selected.opponent.time)}` : ' → next opponent contact missing or ambiguous'}</p>
+          ` → ${players.find(p => p.id === selected.opponent!.playerId)?.name} at ${formatVideoTime(selected.opponent.time)} · ${(selected.opponent.time - selected.shot.time).toFixed(2)}s between contacts` : ' → next opponent contact missing or ambiguous'}</p>
         {automatic && <p>One or both contact tags or player assignments are automatic. Check them in the video before judging. Your judgment stays manual.</p>}
         <div className="workspace-tools">
           <button disabled={!selected.opponent} onClick={() => onReplay(active, selected.shot.time, selected.opponent!.time)}>Replay recovery · ½ speed</button>
@@ -101,13 +116,6 @@ export function RecoveryReview({ active, rallies, shots, players, onChange, onJu
       {late.map(w => <button className="time-link" key={`${w.rally.id}-${w.shot.id}`} onClick={() => choose(w)}>
         Rally {rallies.indexOf(w.rally) + 1} · {formatVideoTime(w.shot.time)}
       </button>)}
-    </div>}
-    {late.length >= 2 && <div className="recovery-cue"><p><strong>Recurring in your review: late recovery ({late.length} shots).</strong> Practice cue: {cue}</p>
-      <div className="workspace-tools"><button onClick={() => {
-        onChange(rallies.map(r => r.id === active.id ? { ...r, focus: 'footwork-recovery', note: cue } : r));
-        setStatus('Practice cue saved in this rally. Export JSON to keep it.');
-      }} disabled={!!active.note}>Save cue to this rally</button></div>
-      {!!active.note && <p>Open Rally setup and notes to edit the existing practice note.</p>}
     </div>}
     <details className="recovery-comparison"><summary>Compare with another session</summary>
       <p>Choose an exported session, then select the same person. Use the same readiness definition and comparable camera views. This describes your reviews; it does not establish training effects.</p>

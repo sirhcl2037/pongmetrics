@@ -29,7 +29,9 @@ Use **Export JSON** to save the review alongside the original video. Upload that
 
 ## Review recovery
 
-Start with one point from a fixed view with your feet visible. Name both players, tag their contacts, and save the rally. In **Recovery review**, select yourself and a shot. **Replay recovery** plays at half speed and freezes at the next tagged opponent contact. **Opponent contact** jumps straight to that frame. Record **Ready** if you were balanced and prepared to move, **Late** if you were still recovering, or **Unclear** if you cannot tell. Once the flow works on your first point, review a batch of 10–20 points.
+Start with one point from a fixed view with your feet visible. Name both players, tag their contacts, and save the rally. In **Coach**, select yourself and click **Review next recovery** to play the next unreviewed recovery across saved rallies. Replay runs at half speed and freezes at the next tagged opponent contact. Record **Ready** if you were balanced and prepared to move, **Late** if you were still recovering, or **Unclear** if you cannot tell. Start with 10–20 points.
+
+If you have ball and player tracks, locate both players and use **Review suggested contacts** to jump to possible contacts before tagging. Suggestions across gaps include the time range bracketed by observed ball positions.
 
 Judgments are manual, even when the contact tags came from an automatic source. Missing, unassigned, repeated-player, or simultaneous contacts never form a guessed recovery window. Tag corrections invalidate affected judgments without erasing their saved snapshots. The summary excludes unclear and unreviewed cases from the late percentage and reports missing contacts separately. It covers tagged shots in saved rallies, not all returns in the video.
 

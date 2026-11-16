@@ -17,6 +17,7 @@ export type Session = {
   players: Player[];
   selectedPlayerId: string;
   ballFps?: number;
+  ballMinimumScore?: number;
   rallies?: ReviewedRally[];
 };
 
@@ -36,6 +37,7 @@ export function parseSession(text: string): Session {
   }
   const ids = new Set<number>();
   if (s.ballFps !== undefined && (!finite(s.ballFps) || s.ballFps < 1 || s.ballFps > 240)) throw new Error('Invalid detection FPS.');
+  if (s.ballMinimumScore !== undefined && (!finite(s.ballMinimumScore) || s.ballMinimumScore < 0 || s.ballMinimumScore > 1)) throw new Error('Invalid minimum ball score.');
   // Older v0.2 exports have no player data: preserve their shots as unassigned.
   const legacy = s.players === undefined;
   if (legacy) { s.players = defaultPlayers(); s.selectedPlayerId = s.players[0].id; }

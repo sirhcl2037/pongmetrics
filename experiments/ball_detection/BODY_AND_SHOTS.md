@@ -1,6 +1,6 @@
 # Body landmarks and experimental shot candidates
 
-Update: shot suggestions now score reversals along the current player axis (method `player-axis-ball-reversal-v2`). See [POSE_CONTACT_AUDIT.md](POSE_CONTACT_AUDIT.md) for implementation, observed pose errors around contacts, and limits on coaching use. The v1 counts below document the initial run.
+Current shot suggestions check player reach and search short ball gaps after both players are located. See [SHOT_LEVEL_VALIDATION.md](SHOT_LEVEL_VALIDATION.md) for the current method and paired audit. The counts and heuristics below document the original prototype.
 
 ## Use in PongMetrics
 

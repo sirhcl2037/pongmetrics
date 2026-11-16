@@ -1,6 +1,6 @@
 import { useMemo, useState, type RefObject } from 'react';
 import { analyzeReviewedShots } from './shotAnalysis';
-import { detectShotCandidates } from './shotDetection';
+import { detectShotCandidates, shotDetectionMethod } from './shotDetection';
 import { clickedPlayerTrack, playerTrackNames, type PlayerTracks } from './playerTracks';
 import type { BallObservation, Player, Session, Shot } from './session';
 
@@ -25,12 +25,17 @@ export function ShotAnalysisReview({shots,observations,fps,threshold,tracks,play
   function exportReport(){
     if(!report) return;
     const url=URL.createObjectURL(new Blob([JSON.stringify({format:'pongmetrics-shot-analysis-review',version:1,video,fps,minimumBallScore:threshold,
+      contactDetectionMethod:shotDetectionMethod,
       completeContactReview:true,fixedCameraConfirmed:fixed,players,
       inputs:{ballObservations:observations,playerTracks:tracks?.json?JSON.parse(tracks.json):null},
       shots:shots.filter(s=>s.source==='manual'&&s.time>=start&&s.time<=finish),report},null,2)],{type:'application/json'}));
     const a=document.createElement('a');a.href=url;a.download=`${video?.name}.shot-analysis-review.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   const percent=(n:number|null)=>n===null?'—':`${(n*100).toFixed(0)}%`;
+  function jumpTo(time: number) {
+    const v = videoRef.current;
+    if (v) { v.pause(); v.currentTime = time; }
+  }
   return <section className="shot-suggestions" aria-label="Shot-level analysis review">
     <h3>Shot-level analysis review</h3>
     <p>Tag every actual contact in a short interval using the existing forehand/backhand controls. Include shots the detector missed. Start with 10–20 shots. Export the session to preserve your tags.</p>
@@ -43,13 +48,18 @@ export function ShotAnalysisReview({shots,observations,fps,threshold,tracks,play
     {!valid && <p role="alert">Choose an interval within the video.</p>}
     {report && <>
       <p>{report.referenceShots} manual shots · contact recall {percent(report.contactRecall)} · precision {percent(report.contactPrecision)} · {report.missedContacts} missed contacts · {report.unmatchedSuggestions.length} unmatched suggestions. Matching tolerance: ±0.12s.</p>
+      {report.meanAbsoluteTimingErrorSeconds !== null && <p>Mean timing difference on matched contacts · {Math.round(report.meanAbsoluteTimingErrorSeconds * 1000)}ms.</p>}
       <p>Ball context: {report.ballContextShots}/{report.referenceShots}. Screen movement measurable: {report.movementMeasuredShots}/{report.referenceShots}. These are evidence checks, not a validated coaching-coverage score.</p>
       <p>Player attribution: {report.details.filter(d=>d.playerAttribution==='correct').length} correct · {report.details.filter(d=>d.playerAttribution==='incorrect').length} incorrect · {report.details.filter(d=>d.playerAttribution==='unknown').length} unknown.</p>
+      {!!report.unmatchedSuggestions.length && <div className="rally-shot-links">
+        <strong>Unmatched suggestions</strong>
+        {report.unmatchedSuggestions.map(time => <button className="time-link" key={time} onClick={() => jumpTo(time)}>{time.toFixed(2)}s</button>)}
+      </div>}
       <h4>Footwork & recovery · evidence preview</h4>
       <p>Measures player-box displacement over 0.3s after contact, in contact-frame box widths. Arm motion can change box centers; this does not measure foot placement, recovery quality, or physical speed.</p>
       <ol className="shot-candidate-list">{report.details.map(row=><li key={row.shotId}>
-        <button onClick={()=>{const v=videoRef.current;if(v){v.pause();v.currentTime=row.time;}}}>{row.time.toFixed(2)}s</button>
-        <span>{row.movement?`${row.movement.bodyWidths.toFixed(2)} box widths moved`:'Movement unavailable'} · ball samples {row.ballBefore} before / {row.ballAfter} after</span>
+        <button onClick={() => jumpTo(row.time)}>{row.time.toFixed(2)}s</button>
+        <span>{row.candidateTime === null ? 'Contact missed' : `Suggested at ${row.candidateTime.toFixed(2)}s${row.candidateGap ? ' (estimated in a ball gap)' : ''}`} · {row.movement?`${row.movement.bodyWidths.toFixed(2)} box widths moved`:'Movement unavailable'} · ball samples {row.ballBefore} before / {row.ballAfter} after</span>
         <details><summary>Evidence and limitations</summary><ul>{row.limitations.map(text=><li key={text}>{text}</li>)}</ul></details>
       </li>)}</ol>
       <h4>Stroke mechanics</h4><p>Available for visual pose review. Detailed joint-angle and power feedback awaits validation.</p>

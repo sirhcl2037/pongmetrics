@@ -3,6 +3,7 @@ import { defaultPlayers, parseSession, type Session } from './session.ts';
 
 export type ReviewDraft = {
   version: 1; video: Session['video']; fps: number; ballFps: number;
+  ballMinimumScore?: number;
   labels: BallLabel[]; observations: Session['ballObservations']; time: number;
 };
 
@@ -14,7 +15,7 @@ export function parseReviewDraft(text: string, file: Pick<File, 'name' | 'size'>
   const draft = JSON.parse(text) as ReviewDraft;
   if (!draft || draft.version !== 1 || draft.video?.name !== file.name || draft.video?.size !== file.size ||
       !Array.isArray(draft.labels) || !Number.isFinite(draft.time) || draft.time < 0) throw new Error('Invalid review draft.');
-  parseSession(JSON.stringify({ version:2, video:draft.video, fps:draft.fps, ballFps:draft.ballFps,
+  parseSession(JSON.stringify({ version:2, video:draft.video, fps:draft.fps, ballFps:draft.ballFps, ballMinimumScore:draft.ballMinimumScore,
     coordinateSystem:'normalized-video-image', calibration:null, shots:[], players:defaultPlayers(),
     selectedPlayerId:'player-1', ballObservations:draft.observations }));
   const timestamps = new Set<number>();

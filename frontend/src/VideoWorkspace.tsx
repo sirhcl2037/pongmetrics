@@ -105,10 +105,11 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     return () => controller.abort();
   }, [file, metadata, localTracking, trackingAttempt, trackingMode]);
   const [ballFps,setBallFps] = useState(savedReview?.ballFps ?? 25);
+  const [threshold,setThreshold] = useState(savedReview?.ballMinimumScore ?? .5);
   const proposal = ballTrail(ballObservations, displayedTime, ballFps, 0).at(-1)?.position ?? null;
   useEffect(() => {
     if (!metadata) return;
-    const text = JSON.stringify({ version:1, video:metadata, fps, ballFps,
+    const text = JSON.stringify({ version:1, video:metadata, fps, ballFps, ballMinimumScore:threshold,
       labels:ballLabels, observations:ballObservations, time:ballLabels.at(-1)?.timestamp ?? savedReview?.time ?? 0 });
     const persist = () => {
       try { localStorage.setItem(reviewDraftKey(file), text); return true; }
@@ -120,8 +121,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     const flush = () => { persist(); };
     window.addEventListener('pagehide', flush);
     return () => { window.clearTimeout(timer); window.removeEventListener('pagehide', flush); flush(); };
-  }, [file, metadata, fps, ballFps, ballLabels, ballObservations, savedReview]);
-  const [threshold,setThreshold] = useState(.5);
+  }, [file, metadata, fps, ballFps, threshold, ballLabels, ballObservations, savedReview]);
   const [showBall,setShowBall] = useState(true);
   const [showBallTrail, setShowBallTrail] = useState(true);
   const [trackingFrames, setTrackingFrames] = useState<TrackingFrame[]>([]);
@@ -251,12 +251,13 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       setFps(session.fps); setCalibration(session.calibration); onShots([...session.shots].sort((a,b) => a.time-b.time)); setBallObservations([...session.ballObservations].sort((a,b) => a.timestamp-b.timestamp));
       setDraft(null); setInspect(false); setSelected(null); setSessionStatus('Session imported.');
       onPlayers(session.players); onSelectPlayer(session.selectedPlayerId); onLocate(null);
+      if (session.ballMinimumScore !== undefined) setThreshold(session.ballMinimumScore);
       setBallFps(session.ballFps ?? session.fps); setTrackingFrames([]);
     } catch (error) { setSessionStatus(error instanceof Error ? error.message : 'Could not import session.'); }
   }
   function exportFile() {
     if (!metadata) return;
-    const session: Session = { version: 2, video: metadata, fps, coordinateSystem: 'normalized-video-image', calibration, shots, ballObservations, players, selectedPlayerId, ballFps, rallies };
+    const session: Session = { version: 2, video: metadata, fps, coordinateSystem: 'normalized-video-image', calibration, shots, ballObservations, players, selectedPlayerId, ballFps, ballMinimumScore: threshold, rallies };
     const href = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = href; a.download = `${name}.pongmetrics.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
@@ -340,6 +341,10 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
       duration={metadata?.duration ?? 0} players={players} shots={shots} onStep={seek}
       pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} />
+    {ballObservations.length >= 5 && <details className="advanced-tools disclosure">
+      <summary>Review suggested contacts</summary>
+      <ShotSuggestions key={sessionRevision} observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
+    </details>}
     <details className="advanced-tools disclosure" onToggle={e => {
       if (e.currentTarget.open) return;
       setLabeling(false); setDraft(null); setInspect(false); setShowBallDebug(false);
@@ -381,8 +386,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         }}>Jump to player tracks</button>}
       </div>
       {trackingStatus && <p role="status">{trackingStatus}</p>}
-      <p>Body landmarks are estimated 2D joints. Hidden or low-score joints stay hidden; blurred or occluded joints can still be misplaced at high scores. Export them separately with player tracks; import through Import player tracks.</p>
-      <ShotSuggestions observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
+      <p>Body landmarks are estimated 2D joints. Occluded joints can appear at high scores. Export landmarks with player tracks.</p>
       <ShotAnalysisReview shots={shots} observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
       <input ref={playerTrackRef} className="visually-hidden" type="file" aria-label="Player tracks file" accept=".json,application/json" onChange={async e => {
         const file = e.target.files?.[0];
