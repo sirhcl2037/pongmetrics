@@ -207,7 +207,9 @@ def replay(cache):
             raise ValueError('Candidate frame indices must strictly increase')
         previous_frame = row['frame']
         original = [c for c in row['candidates'] if c.get('evidence') != 'local-maximum']
-        tracker.update(row['frame'], row['timestamp'], original, row.get('sceneCut', False))
+        tracked = tracker.update(row['frame'], row['timestamp'], original, row.get('sceneCut', False))
+        if row.get('search') == 'skipped-idle':
+            tracked.update(search='skipped-idle', reason='idle-search-skipped')
     rows = tracker.finish()
     if cache.get('model', {}).get('weakPeaks'):
         for row, source in zip(rows, cache['frames']):
@@ -233,6 +235,8 @@ def main():
     p.add_argument('--candidate-floor', type=float, default=.15)
     p.add_argument('--weak-peaks', action='store_true', help='Experimental additional local maxima; requires validation')
     p.add_argument('--full-frame', action='store_true', help='Disable guided crops for controlled comparisons')
+    p.add_argument('--sparse-idle-search', action='store_true',
+                   help='On 100+ FPS video, search every second frame while no track or acquisition is in progress')
     p.add_argument('--refine-gaps', action='store_true', help='Optional offline forward/reverse evidence pass for short gaps')
     p.add_argument('--backend', choices=('auto', 'torch', 'onnx'), default='auto',
                    help='Use an approved local ONNX export when available, or explicitly choose a runtime')
@@ -246,6 +250,8 @@ def main():
         p.error('Invalid end or sample count')
     if a.cpu_threads is not None and a.cpu_threads < 1:
         p.error('CPU thread count must be positive')
+    if a.sparse_idle_search and a.candidates:
+        p.error('Sparse idle search requires video input')
     if a.candidates:
         if a.head_adapter or a.base_model:
             p.error('Cached evidence already belongs to a model; model selection requires --video')
@@ -272,10 +278,21 @@ def main():
         source_rows = []
         failures = 0
         rescue_calls = 0
+        idle_skips = 0
         for i, timestamp, history, cut in detector.frames():
             if timestamp < a.start:
                 continue
             guidance = None if cut else tracker.guidance(timestamp)
+            # Keep the source frame grid and the neural history continuous.
+            # A pending acquisition needs the very next frame to confirm it.
+            if (a.sparse_idle_search and detector.fps >= 100 and i % 2 and source_rows
+                    and not cut and guidance is None and tracker.pending is None):
+                row = tracker.update(i, timestamp, [], cut)
+                row['search'] = 'skipped-idle'
+                row['reason'] = 'idle-search-skipped'
+                source_rows.append(dict(frame=i, timestamp=timestamp, candidates=[], sceneCut=cut, search=row['search']))
+                idle_skips += 1
+                continue
             center = None
             # Reacquire globally after ONE failed crop, and every half second.
             # Crop covers both sides of motion reversal at the original scale.
@@ -304,10 +321,12 @@ def main():
                                 nativeZoom=a.native_zoom, headAdapterSha256=detector.head_adapter_hash, headAdapterName=adapter_name, strongScore=association,
                                 acquisitionScore=tracker.acquisition_score, inferenceBackend=detector.backend,
                                 cpuThreads=detector.cpu_threads,
+                                sparseIdleSearch=a.sparse_idle_search and detector.fps >= 100,
                                 analyzedStart=a.start, analyzedEnd=a.end if np.isfinite(a.end) else detector.end,
                                 temporalOrder='background,BGR[i-3],BGR[i-2],BGR[i-1],BGR[i]; repeat first'),
                      summary=dict(heavyCalls=detector.calls, cropCalls=detector.crop_calls,
-                                  fullFrameCalls=detector.full_frame_calls, sameFrameRescueCalls=rescue_calls, startupSeconds=detector.startup_seconds,
+                                  fullFrameCalls=detector.full_frame_calls, sameFrameRescueCalls=rescue_calls,
+                                  skippedIdleFrames=idle_skips, startupSeconds=detector.startup_seconds,
                                   inferenceSeconds=detector.inference_seconds, totalSeconds=time.perf_counter()-began))
         rows = tracker.finish()
         if a.weak_peaks:

@@ -1,12 +1,13 @@
 import unittest
 import json
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 import numpy as np
 
 from neural_candidates import extract_candidates, temporal_indices, StreamingDetector
-from temporal_track import BallTracker, replay
+from temporal_track import BallTracker, main, replay
 from evaluate_tracking import evaluate, baseline, agreement
 
 
@@ -22,6 +23,39 @@ def track(sequence, times=None, cuts=()):
 
 
 class TemporalTrackingTests(unittest.TestCase):
+    def test_sparse_idle_search_keeps_frame_grid_and_confirms_acquisition(self):
+        class Detector:
+            fps, end, cpu_threads, backend = 120, 1, 8, 'onnx'
+            video = {}
+            weights_hash = head_adapter_hash = None
+            background_sample_count = calls = crop_calls = full_frame_calls = startup_seconds = inference_seconds = 0
+
+            def frames(self):
+                for i in range(7):
+                    yield i, i / self.fps, i, i == 3
+
+            def detect(self, frame, center):
+                self.calls += 1
+                return [candidate(.4)] if frame >= 4 else []
+
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'track.json'
+            cache = Path(folder) / 'candidates.json'
+            argv = ['temporal_track.py', '--video', 'test.mp4', '--sparse-idle-search',
+                    '--output', str(output), '--save-candidates', str(cache)]
+            with patch('sys.argv', argv), patch('neural_candidates.StreamingDetector', return_value=Detector()):
+                main()
+            payload = json.loads(output.read_text(encoding='utf-8'))
+            replayed = replay(json.loads(cache.read_text(encoding='utf-8')))
+        rows = payload['trackingFrames']
+        self.assertEqual([r['frame'] for r in rows], list(range(7)))
+        self.assertEqual(rows[1]['search'], 'skipped-idle')
+        self.assertEqual(rows[3]['search'], 'full-frame')
+        self.assertEqual([r['frame'] for r in rows if r['position'] is not None], [4, 5, 6])
+        self.assertEqual(payload['summary']['sourceRun']['heavyCalls'], 6)
+        self.assertEqual(replayed['ballObservations'], payload['ballObservations'])
+        self.assertEqual(replayed['trackingFrames'][1]['reason'], 'idle-search-skipped')
+
     def test_occlusion_never_emits_prediction_as_observation(self):
         _, rows = track([[candidate(.3)], [candidate(.31)]]+[[]]*25)
         self.assertIsNotNone(rows[0]['position'])
