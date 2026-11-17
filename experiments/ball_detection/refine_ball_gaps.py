@@ -11,12 +11,19 @@ from temporal_track import SCALE, xy
 
 
 MAX_MISSING_FRAMES = 4
+HIGH_RATE_GAP_SECONDS = .05
 ANCHOR_SCORE = .4
 PRIMARY_SCORE = .25
 SUPPORT_SCORE = .1
 AGREEMENT_RADIUS = 3  # Pixels at TrackNet's 512x288 resolution.
 TRACK_RADIUS = 8
 IMAGE_EDGE_MARGIN = 4
+
+
+def missing_frame_limit(fps):
+    # Keep at least four frames at ordinary rates. At 120 FPS a six-frame
+    # gap covers just 50 ms and can still have agreeing image evidence.
+    return max(MAX_MISSING_FRAMES, int(HIGH_RATE_GAP_SECONDS * fps))
 
 
 def confirmed_peak(evidence, expected):
@@ -66,9 +73,10 @@ def image_edge_peak(evidence, expected):
 def refinement_targets(rows, fps):
     """Necessary geometric/continuity checks, shared by inference and refinement."""
     gaps, edges = {}, {}
+    limit = missing_frame_limit(fps)
     anchors = [i for i, row in enumerate(rows) if row['position'] is not None and row['confidence'] >= ANCHOR_SCORE]
     for start, end in zip(anchors, anchors[1:]):
-        if not 1 < end - start <= MAX_MISSING_FRAMES + 1:
+        if not 1 < end - start <= limit + 1:
             continue
         left, right = rows[start], rows[end]
         duration = right['timestamp'] - left['timestamp']
@@ -130,8 +138,8 @@ def refine(baseline, probe):
                 add_observation(row, peak, track_id, 'confirmed-image-edge-peak')
     result['ballObservations'] = sorted(result['ballObservations'] + additions, key=lambda observation: observation['timestamp'])
     result['summary'].update(observations=len(result['ballObservations']), gapRecoveries=len(additions), gapProbe=probe['summary'])
-    result['model']['gapRefinement'] = {'method':'forward-reverse-heatmap-agreement-v1',
-                                       'maxMissingFrames':MAX_MISSING_FRAMES, 'minimumAnchorScore':ANCHOR_SCORE,
+    result['model']['gapRefinement'] = {'method':'forward-reverse-heatmap-agreement-v2',
+                                       'maxMissingFrames':missing_frame_limit(baseline['fps']), 'minimumAnchorScore':ANCHOR_SCORE,
                                        'primaryScore':PRIMARY_SCORE, 'supportScore':SUPPORT_SCORE,
                                        'agreementRadiusModelPixels':AGREEMENT_RADIUS, 'trackRadiusModelPixels':TRACK_RADIUS,
                                        'imageEdgeMarginModelPixels':IMAGE_EDGE_MARGIN}

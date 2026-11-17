@@ -60,6 +60,7 @@ class GapRefinementTest(unittest.TestCase):
             cut = False
             def frames(self):
                 for frame in range(6):
+                    self.last_frame = frame
                     yield frame, frame/25, list(range(max(0, frame-3), frame+1)), self.cut and frame == 2
             def detect(self, history, center=None, *, probe=False):
                 self.calls.append(([int(i) for i in history], probe))
@@ -68,11 +69,26 @@ class GapRefinementTest(unittest.TestCase):
         result = probe(detector, self.baseline['trackingFrames'])
         self.assertEqual(len(result), 1)
         self.assertEqual(detector.calls, [([0,1],True), ([4,3,2,1],True)])
+        self.assertEqual(detector.last_frame, 4)
         detector.calls = []
         detector.cut = True
         result = probe(detector, self.baseline['trackingFrames'])
         self.assertEqual(detector.calls, [])
         self.assertNotIn('reverse', result[0])
+
+    def test_high_rate_expands_only_short_gaps_and_rejects_cuts(self):
+        def rows(fps, missing):
+            return [
+                {'frame':frame, 'timestamp':frame/fps, 'position':None if 0 < frame <= missing else {'x':.4, 'y':.5},
+                 'confidence':.8, 'sceneCut':False, 'trackId':1}
+                for frame in range(missing + 2)
+            ]
+        self.assertEqual(refinement_targets(rows(60, 6), 60), ({}, {}))
+        self.assertEqual(refinement_targets(rows(120, 7), 120), ({}, {}))
+        high = rows(120, 6)
+        self.assertEqual(set(refinement_targets(high, 120)[0]), set(range(1, 7)))
+        high[3]['sceneCut'] = True
+        self.assertEqual(refinement_targets(high, 120), ({}, {}))
 
     def test_image_boundary_requires_crop_peak_and_two_supporting_passes(self):
         self.baseline['trackingFrames'].pop()

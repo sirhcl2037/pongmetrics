@@ -1,6 +1,7 @@
 """Probe missing TrackNet frames with both temporal directions, without using labels."""
 import argparse
 from collections import deque
+from contextlib import closing
 import hashlib
 import json
 import time
@@ -55,11 +56,14 @@ def probe(detector, rows, *, all_nearby=False):
         if len(results) % 20 == 0:
             print(f'{len(results)}/{len(missing)} gap frames probed', flush=True)
 
-    for row in detector.frames():
-        buffered.append(row)
-        if len(buffered) == 4:
-            inspect()
-            buffered.popleft()
+    with closing(detector.frames()) as frames:
+        for row in frames:
+            buffered.append(row)
+            if len(buffered) == 4:
+                inspect()
+                if len(results) == len(missing):
+                    return results
+                buffered.popleft()
     while buffered:
         inspect()
         buffered.popleft()
