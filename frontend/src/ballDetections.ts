@@ -36,7 +36,7 @@ export function ballTrail(observations: BallObservation[], time: number, fps: nu
   return trail;
 }
 
-export type TrackingFrame = { timestamp: number; prediction: { x: number; y: number } | null; uncertaintyRadiusPixels: number | null; reason: string };
+export type TrackingFrame = { timestamp: number; prediction: { x: number; y: number } | null; uncertaintyRadiusPixels: number | null; reason: string; sceneCut?: boolean };
 
 // Keep a time-based history, including disconnected observations during gaps.
 // Binary search avoids scanning the entire recording on each decoded frame.
@@ -70,6 +70,7 @@ export function parseTrackingFrames(text: string): TrackingFrame[] {
     if (!value || typeof value !== 'object') return true;
     const r = value as Partial<TrackingFrame>;
     return !Number.isFinite(r.timestamp) || (r.timestamp as number) < 0 || typeof r.reason !== 'string' ||
+      (r.sceneCut !== undefined && typeof r.sceneCut !== 'boolean') ||
       (i > 0 && (typeof (frames[i-1] as Partial<TrackingFrame>)?.timestamp !== 'number' || r.timestamp <= (frames[i-1] as Partial<TrackingFrame>).timestamp!)) ||
       (r.prediction !== null && (!r.prediction || !Number.isFinite(r.prediction.x) || !Number.isFinite(r.prediction.y))) ||
       (r.uncertaintyRadiusPixels !== null && (!Number.isFinite(r.uncertaintyRadiusPixels) || r.uncertaintyRadiusPixels < 0));

@@ -9,7 +9,7 @@ export function PlayerTrackOverlay({ time, tracks, players, showLandmarks = true
   const names = playerTrackNames(tracks, players);
   return <g className="player-track-overlay" aria-label="Player tracking overlay">
     {people.map(({ trackId, playerId, box, landmarks }) => {
-      const label = names.get(trackId) ?? 'Unassigned';
+      const label = names.get(trackId) ?? `Track ${trackId}`;
       const color = playerId === 'near-player' ? '#75f587' : playerId === 'far-player' ? '#60ddff' : '#ffe875';
       return <g key={trackId}>
         <rect x={box.x} y={box.y} width={box.width} height={box.height} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />

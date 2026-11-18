@@ -39,6 +39,7 @@ export function localPlayerTracking(): Plugin {
     if (busy) return send(409, { error: 'Another video is being analyzed. Try again shortly.' });
     busy = true;
     let folder: string | undefined;
+    let result: { status: number; body: object } | undefined;
     const posePython=process.env.PONGMETRICS_POSE_PYTHON || (process.platform==='win32'
       ? join(experiment,'output','pose-env','Scripts','python.exe') : join(experiment,'output','pose-env','bin','python'));
     const abort = new AbortController();
@@ -75,11 +76,11 @@ export function localPlayerTracking(): Plugin {
       if (rtm) {
         await run(posePython,[join(experiment,'refine_pose.py'),video,output,'--output',output]);
       }
-      send(200, JSON.parse(await readFile(output, 'utf8')));
+      result = { status: 200, body: JSON.parse(await readFile(output, 'utf8')) };
     } catch (error) {
       if (!abort.signal.aborted) {
         console.error(ball ? 'Ball tracking:' : 'Player tracking:', error);
-        send(500, { error: rtm ? 'Could not generate RTMPose landmarks. Check the optional RTMPose setup and video format.' : `Could not generate ${ball ? 'ball' : 'player'} tracks. Check the local Python setup and video format.` });
+        result = { status: 500, body: { error: rtm ? 'Could not generate RTMPose landmarks. Check the optional RTMPose setup and video format.' : `Could not generate ${ball ? 'ball' : 'player'} tracks. Check the local Python setup and video format.` } };
       }
     } finally {
       res.off('close', cancel);
@@ -89,6 +90,7 @@ export function localPlayerTracking(): Plugin {
       }
       busy = false;
     }
+    if (result) send(result.status, result.body);
   }
   return {
     name: 'local-player-tracking',

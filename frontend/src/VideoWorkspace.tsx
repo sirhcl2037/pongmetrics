@@ -4,6 +4,7 @@ import { parseSession, sessionMatchesVideo, type Observation, type Session, type
 import { BallTrajectory } from './BallTrajectory';
 import { ShotSuggestions } from './ShotSuggestions';
 import { ShotAnalysisReview } from './ShotAnalysisReview';
+import { AutomaticCoach } from './AutomaticCoach';
 import { RallyReview } from './RallyReview';
 import type { ReviewedRally } from './rallies';
 import { ballTrail, parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
@@ -16,6 +17,20 @@ import { clickedPlayerTrack, parsePlayerTracks, type PlayerTracks } from './play
 
 const labels = ['1 · Near-left (origin)', '2 · Near-right (width)', '3 · Far-right', '4 · Far-left'];
 type Props = { url: string; file: File; videoRef: RefObject<HTMLVideoElement | null>; shots: Shot[]; onShots: (shots: Shot[]) => void; onTime: (time: number) => void; players: Player[]; selectedPlayerId: string; onPlayers: (players: Player[]) => void; onSelectPlayer: (id: string) => void; locatingPlayerId: string | null; onLocate: (id: string | null) => void };
+
+async function requestLocalTracks(endpoint: string, file: File, signal: AbortSignal, refineBallGaps = false) {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream', ...(refineBallGaps && { 'X-PongMetrics-Refine-Gaps': '1' }) },
+    body: file, signal,
+  });
+  const data = await response.json();
+  signal.throwIfAborted();
+  if (!response.ok) throw new Error(data.error || 'Tracking failed.');
+  // The worker uses a temporary filename for this exact upload.
+  data.video.name = file.name;
+  return JSON.stringify(data);
+}
 
 export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, players, selectedPlayerId, onPlayers, onSelectPlayer, locatingPlayerId, onLocate }: Props) {
   const { name, size } = file;
@@ -77,20 +92,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       setTrackingStatus(trackingMode !== 'players' ? 'Tracking body landmarks… You can annotate while this runs.' : 'Tracking players… You can annotate while this runs.');
       setTrackingFailed(false);
       try {
-        const response = await fetch(trackingMode === 'rtmpose' ? '/api/body-landmarks-rtm' : trackingMode === 'pose' ? '/api/body-landmarks' : '/api/player-tracks', {
-          method: 'POST', headers: { 'Content-Type': 'application/octet-stream' },
-          body: file, signal: controller.signal,
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          if (controller.signal.aborted) return;
-          setTrackingStatus(data.error || 'Player tracking failed.');
-          setTrackingFailed(true);
-          return;
-        }
-        // The local worker uses a temporary filename for this exact upload.
-        data.video.name = file.name;
-        const tracks = parsePlayerTracks(JSON.stringify(data), video);
+        const endpoint = trackingMode === 'rtmpose' ? '/api/body-landmarks-rtm' : trackingMode === 'pose' ? '/api/body-landmarks' : '/api/player-tracks';
+        const tracks = parsePlayerTracks(await requestLocalTracks(endpoint, file, controller.signal), video);
         if (controller.signal.aborted) return;
         setPlayerTracks(tracks);
         setShowPlayerTracks(true);
@@ -126,43 +129,56 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [showBallTrail, setShowBallTrail] = useState(true);
   const [trackingFrames, setTrackingFrames] = useState<TrackingFrame[]>([]);
   const [showBallDebug, setShowBallDebug] = useState(false);
-  const [ballTracking, setBallTracking] = useState(false);
+  const [ballJob, setBallJob] = useState<'ball' | 'coach' | null>(null);
+  const ballTracking = ballJob !== null;
   const [refineBallGaps, setRefineBallGaps] = useState(false);
   const [ballStatus, setBallStatus] = useState('');
+  const [coachStatus, setCoachStatus] = useState('');
   const ballController = useRef<AbortController | null>(null);
   function cancelBallTracking() {
     ballController.current?.abort();
     ballController.current = null;
-    setBallTracking(false);
+    setBallJob(null);
     setBallStatus('');
+    setCoachStatus('');
   }
   useEffect(() => () => ballController.current?.abort(), [file]);
-  async function generateBallTracks() {
-    if (!metadata || ballTracking) return;
+  async function generateBallTracks(forCoach = false) {
+    if (!metadata || ballController.current || trackingStatus.startsWith('Tracking')) return;
     const controller = new AbortController();
     ballController.current = controller;
-    setBallTracking(true);
-    setBallStatus('Tracking ball on this computer… Longer clips can take several minutes.');
+    const { signal } = controller;
+    const setStatus = forCoach ? setCoachStatus : setBallStatus;
+    setBallJob(forCoach ? 'coach' : 'ball');
+    if (forCoach) setTrackingAttempt(0);
+    setStatus('Tracking the ball locally…');
     try {
-      const response = await fetch('/api/ball-tracks', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream',
-        'X-PongMetrics-Refine-Gaps': refineBallGaps ? '1' : '0' }, body: file, signal: controller.signal });
-      const data = await response.json();
-      if (controller.signal.aborted) return;
-      if (!response.ok) { setBallStatus(data.error || 'Ball tracking failed.'); return; }
-      data.video.name = file.name;
-      const text = JSON.stringify(data);
+      const text = await requestLocalTracks('/api/ball-tracks', file, signal, forCoach || refineBallGaps);
       const parsed = parseDetections(text, metadata);
       const diagnostics = parseTrackingFrames(text);
-      if (controller.signal.aborted) return;
+      if (forCoach) {
+        if (!parsed.observations.length) {
+          setStatus('No ball positions were detected. Try a shorter clip with a clearly visible ball.');
+          return;
+        }
+        setStatus('Tracking both players locally…');
+        const tracks = parsePlayerTracks(await requestLocalTracks('/api/player-tracks', file, signal), metadata);
+        if (signal.aborted) return;
+        setPlayerTracks(tracks);
+        setShowPlayerTracks(true);
+        setTrackingFailed(false);
+        setTrackingStatus(`Player tracks ready for ${tracks.frames.size} frames.`);
+      }
+      if (signal.aborted) return;
       setBallObservations(parsed.observations); setBallFps(parsed.fps); setTrackingFrames(diagnostics);
       setFps(parsed.fps);
       setMetadata(previous => previous && parsed.duration > previous.duration ? { ...previous, duration:parsed.duration } : previous);
       setThreshold(.15);
-      setBallStatus(`Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
+      setStatus(forCoach ? '' : `Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
     } catch (error) {
-      if (!controller.signal.aborted) setBallStatus(error instanceof Error ? error.message : 'Ball tracking failed.');
+      if (!signal.aborted) setStatus(error instanceof Error ? error.message : 'Tracking failed.');
     } finally {
-      if (ballController.current === controller) { setBallTracking(false); ballController.current = null; }
+      if (ballController.current === controller) { setBallJob(null); ballController.current = null; }
     }
   }
   useEffect(() => {
@@ -326,6 +342,11 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         </svg>
       </div>
     </div>
+    <AutomaticCoach video={metadata} videoRef={videoRef} observations={ballObservations} fps={ballFps}
+      tracks={playerTracks} diagnostics={trackingFrames} status={coachStatus}
+      disabled={ballTracking || trackingStatus.startsWith('Tracking')}
+      onAnalyze={localTracking ? () => void generateBallTracks(true) : null}
+      onCancel={ballJob === 'coach' ? () => { cancelBallTracking(); setCoachStatus('Analysis canceled.'); } : null} />
     <div className="workspace-tools session-tools" role="group" aria-label="Session file controls">
       <button disabled={!metadata} onClick={() => importRef.current?.click()}>Import JSON</button>
       <button disabled={!metadata} onClick={exportFile}>Export JSON</button>
@@ -355,11 +376,11 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       onDelete={() => setBallLabels(previous => previous.filter(label => Math.abs(label.timestamp - displayedTime) >= .000001))} onStep={seek}
       proposal={proposal} onAccept={() => { if (proposal) saveBallLabel('visible', proposal.value, true); }}
       onNextUnreviewed={nextUnreviewed} autoAdvance={autoAdvance} onAutoAdvance={setAutoAdvance}
-      onGenerate={localTracking ? () => void generateBallTracks() : null} generating={ballTracking} status={[ballStatus, message].filter(Boolean).join(' ')} storageStatus={storageStatus} onImport={backup => void importBallLabels(backup)} />
+      onGenerate={localTracking ? () => void generateBallTracks() : null} generating={ballTracking || trackingStatus.startsWith('Tracking')} status={[ballStatus, message].filter(Boolean).join(' ')} storageStatus={storageStatus} onImport={backup => void importBallLabels(backup)} />
     <div className="calibration-controls">
       {localTracking && <label className="recovery-player"><input type="checkbox" checked={refineBallGaps} disabled={ballTracking}
         onChange={e => setRefineBallGaps(e.target.checked)} /> Recover short ball gaps (extra analysis time)</label>}
-      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballTracking && <button onClick={() => { ballController.current?.abort(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBallTrail} disabled={!showBall} onChange={e => setShowBallTrail(e.target.checked)} /> Detection trail</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
+      <div className="workspace-tools"><button disabled={!metadata} onClick={() => detectionRef.current?.click()}>Import ball detections</button>{localTracking && <button disabled={!metadata || ballTracking || trackingStatus.startsWith('Tracking')} onClick={() => void generateBallTracks()}>Generate ball tracks</button>}{ballJob === 'ball' && <button onClick={() => { cancelBallTracking(); setBallStatus('Ball tracking canceled.'); }}>Cancel ball tracking</button>}<label><input type="checkbox" checked={showBallTrail} disabled={!showBall} onChange={e => setShowBallTrail(e.target.checked)} /> Detection trail</label><label>Min score <input aria-label="Minimum ball score" type="number" min="0" max="1" step=".05" value={threshold} onChange={e => { const n=Number(e.target.value); if (n>=0 && n<=1) setThreshold(n); }} /></label>{trackingFrames.length > 0 && <label><input type="checkbox" checked={showBallDebug} onChange={e => setShowBallDebug(e.target.checked)} /> Show predictions and search radius</label>}</div>
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
@@ -379,7 +400,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           const link=document.createElement('a');link.href=href;link.download=`${name}.player-tracks.json`;link.click();
           setTimeout(() => URL.revokeObjectURL(href),1000);
         }}>Export player tracks & landmarks</button>}
-        {trackingFailed && <button onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Retry player tracking</button>}
+        {trackingFailed && <button disabled={ballTracking} onClick={() => setTrackingAttempt(attempt => attempt + 1)}>Retry player tracking</button>}
         {playerTracks && <button onClick={() => {
           const video = videoRef.current;
           if (video) { video.pause(); video.currentTime = playerTracks.firstTimestamp; }
