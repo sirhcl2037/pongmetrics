@@ -30,6 +30,12 @@ test('switches away from shot review with only one primary track and a person at
   assert.deepEqual(inspectPlayerView(clip(true)), { trackId: 1, onePlayer: false });
 });
 
+test('a consistently tracked background player does not hold up movement review', () => {
+  const tracks = clip(true);
+  for (const people of tracks.frames.values()) people[1].box.width = .08;
+  assert.deepEqual(inspectPlayerView(tracks), { trackId: 1, onePlayer: true });
+});
+
 test('measures swing relative to the shoulder and leaves weak ankle estimates blank', () => {
   const tracks = clip();
   const report = movementReview(tracks, 1, video, []);

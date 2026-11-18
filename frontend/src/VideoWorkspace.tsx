@@ -4,7 +4,7 @@ import { parseSession, sessionMatchesVideo, type Observation, type Session, type
 import { BallTrajectory } from './BallTrajectory';
 import { ShotSuggestions } from './ShotSuggestions';
 import { ShotAnalysisReview } from './ShotAnalysisReview';
-import { AutomaticCoach } from './AutomaticCoach';
+import { AutomaticCoach, type CoachMode } from './AutomaticCoach';
 import { automaticRecovery } from './automaticRecovery';
 import { inspectPlayerView } from './movementReview';
 import { RallyReview } from './RallyReview';
@@ -138,6 +138,8 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [ballStatus, setBallStatus] = useState('');
   const [coachStatus, setCoachStatus] = useState('');
   const [coachBallUnavailable, setCoachBallUnavailable] = useState(false);
+  const [coachMode, setCoachMode] = useState<CoachMode>('auto');
+  const movementView = coachMode === 'movement' || (coachMode === 'auto' && (coachBallUnavailable || playerView?.onePlayer));
   const ballController = useRef<AbortController | null>(null);
   function cancelBallTracking() {
     ballController.current?.abort();
@@ -175,7 +177,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       setFps(tracks.fps);
       setTrackingFailed(false);
       setTrackingStatus(`Player tracks ready for ${tracks.frames.size} frames.`);
-      setCoachBallUnavailable(movementOnly);
+      setCoachBallUnavailable(movementOnly && coachMode === 'auto');
       if (movementOnly) {
         setShowBall(false);
         setShowBallDebug(false);
@@ -192,16 +194,17 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       let diagnostics: TrackingFrame[] = [];
       let ballFailed = false;
       const view = tracks ? inspectPlayerView(tracks) : null;
-      if (tracks && view?.onePlayer) {
-        tracks = await measureMovement(tracks, metadata);
+      const movementFirst = forCoach && (coachMode === 'movement' || (coachMode === 'auto' && view?.onePlayer));
+      if (tracks && movementFirst) {
+        if (view?.trackId != null) tracks = await measureMovement(tracks, metadata);
         if (signal.aborted) return;
         showCoachTracks(tracks, true);
       }
 
       if (!view || view.trackId !== null) {
-        setStatus(view?.onePlayer ? 'Movement review is ready. Checking ball positions locally…' : 'Tracking the ball locally…');
+        setStatus(movementFirst ? 'Movement review is ready. Checking ball positions locally…' : 'Tracking the ball locally…');
         try {
-          const refine = refineBallGaps || (forCoach && !view?.onePlayer);
+          const refine = refineBallGaps || (forCoach && !movementFirst);
           const text = await requestLocalTracks('/api/ball-tracks', file, signal, refine);
           diagnostics = parseTrackingFrames(text);
           parsed = parseDetections(text, metadata);
@@ -212,9 +215,9 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       }
 
       if (tracks) {
-        if (!view?.onePlayer) {
-          const movementOnly = !parsed?.observations.length ||
-            !automaticRecovery(parsed.observations, parsed.fps, tracks, metadata, diagnostics).players.some(player => player.examples.length);
+        if (!movementFirst) {
+          const movementOnly = coachMode === 'auto' && (!parsed?.observations.length ||
+            !automaticRecovery(parsed.observations, parsed.fps, tracks, metadata, diagnostics).players.some(player => player.examples.length));
           if (movementOnly && view?.trackId != null) tracks = await measureMovement(tracks, metadata);
           if (signal.aborted) return;
           showCoachTracks(tracks, movementOnly);
@@ -399,6 +402,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     </div>
     <AutomaticCoach video={metadata} videoRef={videoRef} time={time} onSeek={setTime} observations={ballObservations} fps={ballFps}
       tracks={playerTracks} view={playerView} diagnostics={trackingFrames} status={coachStatus} ballUnavailable={coachBallUnavailable}
+      mode={coachMode} onMode={mode => { setCoachMode(mode); setCoachStatus(''); if (mode === 'movement') setShowBall(false); }}
       disabled={ballTracking || trackingStatus.startsWith('Tracking')}
       onAnalyze={localTracking ? () => void generateBallTracks(true) : null}
       onCancel={ballJob === 'coach' ? () => { cancelBallTracking(); setCoachStatus('Analysis canceled.'); } : null} />
@@ -412,13 +416,13 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       <button disabled={!metadata} onClick={() => seek(-1)}>← Previous frame</button>
       <button disabled={!metadata} onClick={() => seek(1)}>Next frame →</button>
       {!!ballObservations.length && <label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} />
-        {coachBallUnavailable || playerView?.onePlayer ? 'Ball overlay (unverified)' : 'Ball overlay'}</label>}
+        {movementView ? 'Ball overlay (unverified)' : 'Ball overlay'}</label>}
     </div>
     {locatingPlayerId && <div className="workspace-tools review-frame-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
     <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
       duration={metadata?.duration ?? 0} players={players} shots={shots} onStep={seek}
       pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} />
-    {ballObservations.length >= 5 && !coachBallUnavailable && !playerView?.onePlayer && <details className="advanced-tools disclosure">
+    {ballObservations.length >= 5 && !movementView && <details className="advanced-tools disclosure">
       <summary>Review suggested contacts</summary>
       <ShotSuggestions key={sessionRevision} observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
     </details>}

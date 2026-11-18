@@ -21,11 +21,14 @@ export function inspectPlayerView(tracks: PlayerTracks) {
   for (const people of tracks.frames.values()) {
     const player = people.find(person => person.trackId === trackId);
     if (!player) continue;
+    const foregroundArea = player.box.width * player.box.height;
     for (const person of people) {
       const { x, width, height } = person.box;
-      if (person.trackId !== trackId && height >= .4 * player.box.height && x + width / 2 > .05 && x + width / 2 < .95) {
-        overlap.set(person.trackId, (overlap.get(person.trackId) ?? 0) + 1);
-      }
+      const center = x + width / 2;
+      // A narrow background box can be tall enough to pass a height-only check.
+      if (person.trackId === trackId || height < .4 * player.box.height ||
+          width * height < .3 * foregroundArea || center <= .05 || center >= .95) continue;
+      overlap.set(person.trackId, (overlap.get(person.trackId) ?? 0) + 1);
     }
   }
   return { trackId, onePlayer: ![...overlap.values()].some(frames => frames >= .15 * score.frames) };
