@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { homography, imageRect, normalizePoint, TABLE, transform, validateCorners, type Point } from './geometry';
 import { parseSession, sessionMatchesVideo, type Observation, type Session, type Shot, type Player } from './session';
 import { BallTrajectory } from './BallTrajectory';
 import { ShotSuggestions } from './ShotSuggestions';
 import { ShotAnalysisReview } from './ShotAnalysisReview';
 import { AutomaticCoach } from './AutomaticCoach';
+import { automaticRecovery } from './automaticRecovery';
+import { inspectPlayerView } from './movementReview';
 import { RallyReview } from './RallyReview';
 import type { ReviewedRally } from './rallies';
 import { ballTrail, parseDetections, parseTrackingFrames, type TrackingFrame } from './ballDetections';
@@ -78,6 +80,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const detectionRef = useRef<HTMLInputElement>(null);
   const playerTrackRef = useRef<HTMLInputElement>(null);
   const [playerTracks, setPlayerTracks] = useState<PlayerTracks | null>(null);
+  const playerView = useMemo(() => playerTracks ? inspectPlayerView(playerTracks) : null, [playerTracks]);
   const [showPlayerTracks, setShowPlayerTracks] = useState(true);
   const [showLandmarks, setShowLandmarks] = useState(true);
   const [trackingMode, setTrackingMode] = useState<'players'|'pose'|'rtmpose'>('players');
@@ -134,6 +137,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   const [refineBallGaps, setRefineBallGaps] = useState(false);
   const [ballStatus, setBallStatus] = useState('');
   const [coachStatus, setCoachStatus] = useState('');
+  const [coachBallUnavailable, setCoachBallUnavailable] = useState(false);
   const ballController = useRef<AbortController | null>(null);
   function cancelBallTracking() {
     ballController.current?.abort();
@@ -151,30 +155,81 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     const setStatus = forCoach ? setCoachStatus : setBallStatus;
     setBallJob(forCoach ? 'coach' : 'ball');
     if (forCoach) setTrackingAttempt(0);
-    setStatus('Tracking the ball locally…');
-    try {
-      const text = await requestLocalTracks('/api/ball-tracks', file, signal, forCoach || refineBallGaps);
-      const parsed = parseDetections(text, metadata);
-      const diagnostics = parseTrackingFrames(text);
-      if (forCoach) {
-        if (!parsed.observations.length) {
-          setStatus('No ball positions were detected. Try a shorter clip with a clearly visible ball.');
-          return;
-        }
-        setStatus('Tracking both players locally…');
-        const tracks = parsePlayerTracks(await requestLocalTracks('/api/player-tracks', file, signal), metadata);
-        if (signal.aborted) return;
-        setPlayerTracks(tracks);
-        setShowPlayerTracks(true);
-        setTrackingFailed(false);
-        setTrackingStatus(`Player tracks ready for ${tracks.frames.size} frames.`);
+    let poseFailed = false;
+
+    async function measureMovement(tracks: PlayerTracks, video: Session['video']) {
+      setStatus('Measuring player movement locally…');
+      try {
+        const pose = parsePlayerTracks(await requestLocalTracks('/api/body-landmarks', file, signal), video);
+        if (inspectPlayerView(pose).trackId !== null) return pose;
+      } catch (error) {
+        if (signal.aborted) throw error;
       }
-      if (signal.aborted) return;
+      poseFailed = true;
+      return tracks;
+    }
+
+    function showCoachTracks(tracks: PlayerTracks, movementOnly: boolean) {
+      setPlayerTracks(tracks);
+      setShowPlayerTracks(true);
+      setFps(tracks.fps);
+      setTrackingFailed(false);
+      setTrackingStatus(`Player tracks ready for ${tracks.frames.size} frames.`);
+      setCoachBallUnavailable(movementOnly);
+      if (movementOnly) {
+        setShowBall(false);
+        setShowBallDebug(false);
+      }
+    }
+
+    try {
+      let tracks: PlayerTracks | null = null;
+      if (forCoach) {
+        setStatus('Checking visible players locally…');
+        tracks = parsePlayerTracks(await requestLocalTracks('/api/player-tracks', file, signal), metadata);
+      }
+      let parsed: ReturnType<typeof parseDetections> | null = null;
+      let diagnostics: TrackingFrame[] = [];
+      let ballFailed = false;
+      const view = tracks ? inspectPlayerView(tracks) : null;
+      if (tracks && view?.onePlayer) {
+        tracks = await measureMovement(tracks, metadata);
+        if (signal.aborted) return;
+        showCoachTracks(tracks, true);
+      }
+
+      if (!view || view.trackId !== null) {
+        setStatus(view?.onePlayer ? 'Movement review is ready. Checking ball positions locally…' : 'Tracking the ball locally…');
+        try {
+          const refine = refineBallGaps || (forCoach && !view?.onePlayer);
+          const text = await requestLocalTracks('/api/ball-tracks', file, signal, refine);
+          diagnostics = parseTrackingFrames(text);
+          parsed = parseDetections(text, metadata);
+        } catch (error) {
+          if (!tracks || signal.aborted) throw error;
+          ballFailed = true;
+        }
+      }
+
+      if (tracks) {
+        if (!view?.onePlayer) {
+          const movementOnly = !parsed?.observations.length ||
+            !automaticRecovery(parsed.observations, parsed.fps, tracks, metadata, diagnostics).players.some(player => player.examples.length);
+          if (movementOnly && view?.trackId != null) tracks = await measureMovement(tracks, metadata);
+          if (signal.aborted) return;
+          showCoachTracks(tracks, movementOnly);
+        }
+        setStatus([ballFailed && 'Ball tracking could not complete.', poseFailed && 'Pose was unavailable. Using player boxes.'].filter(Boolean).join(' '));
+      }
+      if (signal.aborted || !parsed) return;
       setBallObservations(parsed.observations); setBallFps(parsed.fps); setTrackingFrames(diagnostics);
       setFps(parsed.fps);
       setMetadata(previous => previous && parsed.duration > previous.duration ? { ...previous, duration:parsed.duration } : previous);
       setThreshold(.15);
-      setStatus(forCoach ? '' : `Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
+      if (!forCoach) {
+        setCoachBallUnavailable(false);
+        setStatus(`Ball tracking ready: ${parsed.observations.length} observations. Weak detections use nearby frames for confirmation.`);
+      }
     } catch (error) {
       if (!signal.aborted) setStatus(error instanceof Error ? error.message : 'Tracking failed.');
     } finally {
@@ -268,7 +323,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       setDraft(null); setInspect(false); setSelected(null); setSessionStatus('Session imported.');
       onPlayers(session.players); onSelectPlayer(session.selectedPlayerId); onLocate(null);
       if (session.ballMinimumScore !== undefined) setThreshold(session.ballMinimumScore);
-      setBallFps(session.ballFps ?? session.fps); setTrackingFrames([]);
+      setBallFps(session.ballFps ?? session.fps); setTrackingFrames([]); setCoachBallUnavailable(false);
     } catch (error) { setSessionStatus(error instanceof Error ? error.message : 'Could not import session.'); }
   }
   function exportFile() {
@@ -343,7 +398,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       </div>
     </div>
     <AutomaticCoach video={metadata} videoRef={videoRef} time={time} onSeek={setTime} observations={ballObservations} fps={ballFps}
-      tracks={playerTracks} diagnostics={trackingFrames} status={coachStatus}
+      tracks={playerTracks} view={playerView} diagnostics={trackingFrames} status={coachStatus} ballUnavailable={coachBallUnavailable}
       disabled={ballTracking || trackingStatus.startsWith('Tracking')}
       onAnalyze={localTracking ? () => void generateBallTracks(true) : null}
       onCancel={ballJob === 'coach' ? () => { cancelBallTracking(); setCoachStatus('Analysis canceled.'); } : null} />
@@ -356,13 +411,14 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     <div className="workspace-tools review-frame-tools" role="group" aria-label="Video review controls">
       <button disabled={!metadata} onClick={() => seek(-1)}>← Previous frame</button>
       <button disabled={!metadata} onClick={() => seek(1)}>Next frame →</button>
-      {!!ballObservations.length && <label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} /> Ball overlay</label>}
+      {!!ballObservations.length && <label><input type="checkbox" checked={showBall} onChange={e => setShowBall(e.target.checked)} />
+        {coachBallUnavailable || playerView?.onePlayer ? 'Ball overlay (unverified)' : 'Ball overlay'}</label>}
     </div>
     {locatingPlayerId && <div className="workspace-tools review-frame-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
     <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
       duration={metadata?.duration ?? 0} players={players} shots={shots} onStep={seek}
       pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} />
-    {ballObservations.length >= 5 && <details className="advanced-tools disclosure">
+    {ballObservations.length >= 5 && !coachBallUnavailable && !playerView?.onePlayer && <details className="advanced-tools disclosure">
       <summary>Review suggested contacts</summary>
       <ShotSuggestions key={sessionRevision} observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />
     </details>}
@@ -384,7 +440,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       {ballStatus && <p role="status">{ballStatus}</p>}
       <input ref={detectionRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={async e => {
         const file=e.target.files?.[0]; e.target.value=''; if (!file || !metadata) return;
-        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setBallObservations(data.observations); setBallFps(data.fps); setFps(data.fps); setMetadata(previous => previous && data.duration > previous.duration ? { ...previous, duration:data.duration } : previous); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
+        try { const text=await file.text(); const data=parseDetections(text,metadata); const diagnostics=parseTrackingFrames(text); cancelBallTracking(); setCoachBallUnavailable(false); setBallObservations(data.observations); setBallFps(data.fps); setFps(data.fps); setMetadata(previous => previous && data.duration > previous.duration ? { ...previous, duration:data.duration } : previous); setTrackingFrames(diagnostics); setThreshold(.15); setMessage(`Imported ${data.observations.length} detections. Gaps remain empty; scores are not calibrated probabilities.`); } catch (error) { setMessage((error as Error).message); }
       }} />
       <p>{ballObservations.length} ball observations. The fading trail shows the past half second of detected positions, with breaks at missing or low-score frames. Export JSON also saves these observations.</p>
       <div className="workspace-tools">
@@ -417,6 +473,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
           const tracks = parsePlayerTracks(await file.text(), metadata);
           setPlayerTracks(tracks);
           setShowPlayerTracks(true);
+          if (inspectPlayerView(tracks).onePlayer) setShowBall(false);
           setMessage(`Imported player tracks for ${tracks.frames.size} frames.`);
         } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not import player tracks.'); }
       }} />

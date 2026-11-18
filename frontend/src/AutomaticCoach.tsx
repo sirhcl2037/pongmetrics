@@ -5,6 +5,8 @@ import type { PlayerTracks } from './playerTracks';
 import type { BallObservation, Session } from './session';
 import { formatVideoTime } from './videoFrames';
 import { ShotStepper } from './ShotStepper';
+import { movementReview, type inspectPlayerView } from './movementReview';
+import { MovementPreview } from './MovementPreview';
 
 type Props = {
   video: Session['video'] | null;
@@ -14,16 +16,21 @@ type Props = {
   observations: BallObservation[];
   fps: number;
   tracks: PlayerTracks | null;
+  view: ReturnType<typeof inspectPlayerView> | null;
   diagnostics: TrackingFrame[];
   onAnalyze: (() => void) | null;
   onCancel: (() => void) | null;
   disabled: boolean;
   status: string;
+  ballUnavailable: boolean;
 };
 
-export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fps, tracks, diagnostics, onAnalyze, onCancel, disabled, status }: Props) {
-  const report = useMemo(() => video && observations.length
-    ? automaticRecovery(observations, fps, tracks, video, diagnostics) : null, [video, observations, fps, tracks, diagnostics]);
+export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fps, tracks, view, diagnostics, onAnalyze, onCancel, disabled, status, ballUnavailable }: Props) {
+  const report = useMemo(() => video && observations.length && !view?.onePlayer && !ballUnavailable
+    ? automaticRecovery(observations, fps, tracks, video, diagnostics) : null, [video, observations, fps, tracks, diagnostics, view, ballUnavailable]);
+  const movementOnly = !!tracks && (ballUnavailable || view?.onePlayer || (report && !report.players.some(player => player.examples.length)));
+  const movement = useMemo(() => movementOnly && video && tracks && view?.trackId != null
+    ? movementReview(tracks, view.trackId, video, diagnostics) : null, [movementOnly, video, tracks, view, diagnostics]);
 
   function jump(time: number) {
     const video = videoRef.current;
@@ -35,16 +42,17 @@ export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fp
 
   return <section className="rally-review" aria-labelledby="automatic-coach-heading">
     <h3 id="automatic-coach-heading">Coach preview</h3>
-    <p>Analyze a short, fixed-camera singles clip to step through both players’ estimated contacts.</p>
+    <p>Analyze a short, fixed-camera clip for shot steps or movement review.</p>
     {onAnalyze && <div className="workspace-tools">
       <button disabled={disabled || !video} onClick={onAnalyze}>Analyze clip</button>
       {onCancel && <button onClick={onCancel}>Cancel analysis</button>}
     </div>}
     {status && <p role="status">{status}</p>}
-    {!onAnalyze && !report && <p>Import matching ball detections in Advanced tools to step through contacts.</p>}
-    {report && <ShotStepper steps={report.turns} time={time} readTime={() => videoRef.current?.currentTime ?? time} onJump={jump} />}
-    {report && !tracks && <p>Import matching player tracks in Advanced tools to show estimated hitters and movement.</p>}
-    {report && tracks && (report.players.length ? <>
+    {!onAnalyze && !report && !movementOnly && <p>Import matching tracks in Advanced tools. Player tracks can show movement; ball detections help estimate contacts.</p>}
+    {movementOnly && <MovementPreview trackId={view?.trackId ?? null} report={movement} onePlayer={view?.onePlayer ?? false} onJump={jump} />}
+    {!movementOnly && report && <ShotStepper steps={report.turns} time={time} readTime={() => videoRef.current?.currentTime ?? time} onJump={jump} />}
+    {!movementOnly && report && !tracks && <p>Import matching player tracks in Advanced tools to show estimated hitters and movement.</p>}
+    {!movementOnly && report && tracks && <>
       <p>Movement is the on-screen shift of the player’s box in the last {recoveryMotionSeconds * 1000} ms before the estimated contact. Check the examples against the video.</p>
       {!!report.unassignedContacts && <p>{report.unassignedContacts} contact estimates without a clear hitter.</p>}
       {report.players.map(player => {
@@ -66,6 +74,6 @@ export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fp
           </ol>}
         </div>;
       })}
-    </> : <p>Couldn’t identify a consistent pair of players in this clip.</p>)}
+    </>}
   </section>;
 }
