@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useState, type RefObject } from 'react';
 import { rallyFocusOptions, rallyNoteLimit, rallyRangeError, type RallyRange, type ReviewedRally } from './rallies';
 import type { Player, Shot } from './session';
 import { formatVideoTime } from './videoFrames';
 import { RecoveryReview } from './RecoveryReview';
+import type { useRangeReplay } from './useRangeReplay';
 
 type Props = {
   rallies: ReviewedRally[];
@@ -15,74 +16,23 @@ type Props = {
   onStep: (direction: number) => void;
   pinVideo: boolean;
   onPinVideo: (pin: boolean) => void;
+  replay: ReturnType<typeof useRangeReplay>;
 };
 
-type Replay = RallyRange & { id: string; previousRate: number | null };
-
-function clearReplay(video: HTMLVideoElement, replay: RefObject<Replay | null>) {
-  const current = replay.current;
-  replay.current = null;
-  if (current?.previousRate != null) video.playbackRate = current.previousRate;
-}
-
-function stopAtRallyEnd(video: HTMLVideoElement, replay: RefObject<Replay | null>) {
-  const range = replay.current;
-  if (!range || video.seeking || video.currentTime < range.end) return;
-  clearReplay(video, replay);
-  video.pause();
-  video.currentTime = range.end;
-}
-
-export function RallyReview({ rallies, onChange, videoRef, displayedTime, duration, players, shots, onStep, pinVideo, onPinVideo }: Props) {
+export function RallyReview({ rallies, onChange, videoRef, displayedTime, duration, players, shots, onStep, pinVideo, onPinVideo, replay }: Props) {
   const [draft, setDraft] = useState<Partial<RallyRange> & { id?: string }>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const replay = useRef<Replay | null>(null);
   const active = rallies.find(rally => rally.id === selectedId) ?? rallies[0];
   const range = draft.start !== undefined && draft.end !== undefined ? { start: draft.start, end: draft.end } : null;
   const rangeError = range ? rallyRangeError(range, duration, rallies, draft.id) : '';
   const editing = draft.id === undefined ? -1 : rallies.findIndex(rally => rally.id === draft.id);
   const activeShots = active ? shots.filter(shot => shot.time >= active.start && shot.time < active.end) : [];
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const progress = () => stopAtRallyEnd(video, replay);
-    const pause = () => { if (video.paused) clearReplay(video, replay); };
-    const seek = () => {
-      if (replay.current && Math.abs(video.currentTime - replay.current.start) > .001) clearReplay(video, replay);
-    };
-    video.addEventListener('timeupdate', progress);
-    video.addEventListener('pause', pause);
-    video.addEventListener('ended', pause);
-    video.addEventListener('seeking', seek);
-    return () => {
-      clearReplay(video, replay);
-      video.removeEventListener('timeupdate', progress);
-      video.removeEventListener('pause', pause);
-      video.removeEventListener('ended', pause);
-      video.removeEventListener('seeking', seek);
-    };
-  }, [videoRef]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) stopAtRallyEnd(video, replay);
-  }, [displayedTime, videoRef]);
-
-  useEffect(() => {
-    const playing = replay.current;
-    const video = videoRef.current;
-    if (video && playing && !rallies.some(rally => rally.id === playing.id && rally.start <= playing.start && rally.end >= playing.end)) {
-      clearReplay(video, replay);
-      video.pause();
-    }
-  }, [rallies, videoRef]);
-
   function markBoundary(boundary: keyof RallyRange) {
     const video = videoRef.current;
     if (!video) return;
-    clearReplay(video, replay);
+    replay.clear();
     video.pause();
     if (video.seeking || video.readyState < 2 || Math.abs(video.currentTime - displayedTime) > .1) {
       setMessage('Wait for the frame to load, then mark it.');
@@ -111,29 +61,9 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
     onChange(rallies.map(rally => rally.id === active?.id ? { ...rally, ...changes } : rally));
   }
 
-  function jumpTo(time: number) {
-    const video = videoRef.current;
-    if (!video) return;
-    clearReplay(video, replay);
-    video.pause();
-    video.currentTime = time;
-  }
-
   async function replayRally(rally: RallyRange & { id: string }, slow = false) {
-    const video = videoRef.current;
-    if (!video) return;
     setMessage('');
-    clearReplay(video, replay);
-    const playing = { ...rally, previousRate: slow ? video.playbackRate : null };
-    if (slow) video.playbackRate = .5;
-    replay.current = playing;
-    video.currentTime = rally.start;
-    try { await video.play(); }
-    catch {
-      if (replay.current !== playing) return;
-      clearReplay(video, replay);
-      setMessage('Playback could not start. Try replay again.');
-    }
+    if (!await replay.play(rally, { slow, rallyId: rally.id })) setMessage('Playback could not start. Try replay again.');
   }
 
   const unscored = rallies.filter(rally => rally.winnerId === null).length;
@@ -158,7 +88,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
     {active && <>
       <ol className="rally-list" aria-label="Saved rallies">
         {rallies.map((rally, index) => <li key={rally.id}>
-          <button aria-pressed={rally.id === active.id} onClick={() => { setSelectedId(rally.id); jumpTo(rally.start); }}>
+          <button aria-pressed={rally.id === active.id} onClick={() => { setSelectedId(rally.id); replay.jump(rally.start); }}>
             <strong>Rally {index + 1}</strong><span>{formatVideoTime(rally.start)} – {formatVideoTime(rally.end)}</span>
           </button>
         </li>)}
@@ -167,7 +97,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
         <button onClick={() => void replayRally(active)}>Replay rally</button>
       </div>
       <RecoveryReview active={active} rallies={rallies} shots={shots} players={players} onChange={onChange} onStep={onStep}
-        onJump={(rally, time) => { setSelectedId(rally.id); jumpTo(time); }}
+        onJump={(rally, time) => { setSelectedId(rally.id); replay.jump(time); }}
         onReplay={(rally, start, end) => void replayRally({ id: rally.id, start, end }, true)} />
       <details className="rally-details disclosure">
       <summary>Rally setup and notes</summary>
@@ -202,7 +132,7 @@ export function RallyReview({ rallies, onChange, videoRef, displayedTime, durati
       </div>
       {!!activeShots.length && <div className="rally-shot-links">
         <span>Tagged shots</span>
-        {activeShots.map(shot => <button className="time-link" key={shot.id} onClick={() => jumpTo(shot.time)}>
+        {activeShots.map(shot => <button className="time-link" key={shot.id} onClick={() => replay.jump(shot.time)}>
           {formatVideoTime(shot.time)} · {players.find(player => player.id === shot.playerId)?.name ?? 'Unassigned'} · {shot.wing} {shot.stroke}
         </button>)}
       </div>}

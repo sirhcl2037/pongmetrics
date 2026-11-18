@@ -7,6 +7,7 @@ import { formatVideoTime } from './videoFrames';
 import { ShotStepper } from './ShotStepper';
 import { movementReview, type inspectPlayerView } from './movementReview';
 import { MovementPreview } from './MovementPreview';
+import type { useRangeReplay } from './useRangeReplay';
 
 export type CoachMode = 'auto' | 'movement' | 'match';
 
@@ -27,9 +28,10 @@ type Props = {
   ballUnavailable: boolean;
   mode: CoachMode;
   onMode: (mode: CoachMode) => void;
+  replay: ReturnType<typeof useRangeReplay>;
 };
 
-export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fps, tracks, view, diagnostics, onAnalyze, onCancel, disabled, status, ballUnavailable, mode, onMode }: Props) {
+export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fps, tracks, view, diagnostics, onAnalyze, onCancel, disabled, status, ballUnavailable, mode, onMode, replay }: Props) {
   const movementFirst = mode === 'movement' || (mode === 'auto' && (view?.onePlayer || ballUnavailable));
   const report = useMemo(() => video && observations.length && !movementFirst
     ? automaticRecovery(observations, fps, tracks, video, diagnostics) : null, [video, observations, fps, tracks, diagnostics, movementFirst]);
@@ -43,8 +45,7 @@ export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fp
   function jump(time: number) {
     const video = videoRef.current;
     if (!video) return;
-    video.pause();
-    video.currentTime = time;
+    replay.jump(time);
     onSeek(video.currentTime);
   }
 
@@ -64,7 +65,10 @@ export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fp
     {status && <p role="status">{status}</p>}
     {!onAnalyze && !report && !movementOnly && <p>Import matching tracks in Advanced tools. Player tracks can show movement; ball detections help estimate contacts.</p>}
     {movementOnly && <MovementPreview trackId={view?.trackId ?? null} report={movement}
-      selected={mode === 'movement'} onePlayer={view?.onePlayer ?? false} onJump={jump} />}
+      selected={mode === 'movement'} onePlayer={view?.onePlayer ?? false} onReplay={range => {
+        videoRef.current?.scrollIntoView({ block: 'nearest' });
+        return replay.play(range, { slow: true });
+      }} />}
     {unsupportedMatch && <p>Match analysis needs a supported sequence between two players. Use Single-player movement for a one-sided clip.</p>}
     {showShots && <ShotStepper steps={report.turns} time={time} readTime={() => videoRef.current?.currentTime ?? time} onJump={jump} />}
     {showShots && !tracks && <p>Import matching player tracks in Advanced tools to show estimated hitters and movement.</p>}

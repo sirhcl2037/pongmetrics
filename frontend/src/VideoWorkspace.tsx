@@ -15,6 +15,7 @@ import { BallTrackingDebug } from './BallTrackingDebug';
 import { PlayerTrackOverlay } from './PlayerTrackOverlay';
 import { BallLabeler, type BallLabel } from './BallLabeler';
 import { useVideoFrameTime } from './useVideoFrameTime';
+import { useRangeReplay } from './useRangeReplay';
 import { clickedPlayerTrack, parsePlayerTracks, type PlayerTracks } from './playerTracks';
 
 const labels = ['1 · Near-left (origin)', '2 · Near-right (width)', '3 · Far-right', '4 · Far-left'];
@@ -65,6 +66,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   }
   const [metadata, setMetadata] = useState<Session['video'] | null>(null);
   const [rallies, setRallies] = useState<ReviewedRally[]>([]);
+  const replay = useRangeReplay(videoRef, displayedTime, rallies);
   const [pinReviewVideo, setPinReviewVideo] = useState(true);
   const [sessionStatus, setSessionStatus] = useState('');
   const [sessionRevision, setSessionRevision] = useState(0);
@@ -258,6 +260,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
   function seek(direction: number) {
     const video = videoRef.current;
     if (!video || !metadata) return;
+    replay.clear();
     video.pause();
     updateDuration(video);
     const duration = Math.max(metadata.duration, Number.isFinite(video.duration) ? video.duration : 0);
@@ -318,6 +321,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         return;
       }
       cancelBallTracking();
+      replay.clear();
       videoRef.current?.pause();
       if (session.video.duration > metadata.duration) setMetadata({ ...metadata, duration: session.video.duration });
       setRallies(session.rallies ?? []);
@@ -401,6 +405,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       </div>
     </div>
     <AutomaticCoach video={metadata} videoRef={videoRef} time={time} onSeek={setTime} observations={ballObservations} fps={ballFps}
+      replay={replay}
       tracks={playerTracks} view={playerView} diagnostics={trackingFrames} status={coachStatus} ballUnavailable={coachBallUnavailable}
       mode={coachMode} onMode={mode => { setCoachMode(mode); setCoachStatus(''); if (mode === 'movement') setShowBall(false); }}
       disabled={ballTracking || trackingStatus.startsWith('Tracking')}
@@ -421,7 +426,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
     {locatingPlayerId && <div className="workspace-tools review-frame-tools"><p>Click {players.find(p => p.id === locatingPlayerId)?.name} in the video.</p><button onClick={() => onLocate(null)}>Cancel player location</button></div>}
     <RallyReview key={sessionRevision} rallies={rallies} onChange={setRallies} videoRef={videoRef} displayedTime={displayedTime}
       duration={metadata?.duration ?? 0} players={players} shots={shots} onStep={seek}
-      pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} />
+      pinVideo={pinReviewVideo} onPinVideo={setPinReviewVideo} replay={replay} />
     {ballObservations.length >= 5 && !movementView && <details className="advanced-tools disclosure">
       <summary>Review suggested contacts</summary>
       <ShotSuggestions key={sessionRevision} observations={ballObservations} fps={ballFps} threshold={threshold} tracks={playerTracks} players={players} videoRef={videoRef} video={metadata} />

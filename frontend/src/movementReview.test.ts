@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { inspectPlayerView, movementReview } from './movementReview.ts';
+import { inspectPlayerView, movementExamples, movementReview } from './movementReview.ts';
 import type { BodyLandmark, PlayerBox, PlayerTracks } from './playerTracks.ts';
 
 const video = { width: 1280, height: 720, duration: .5 };
@@ -46,4 +46,22 @@ test('measures swing relative to the shoulder and leaves weak ankle estimates bl
   assert.equal(example.feet, null);
   const cut = { timestamp: .2, sceneCut: true, prediction: null, uncertaintyRadiusPixels: null, reason: 'scene cut' };
   assert.deepEqual(movementReview(tracks, 1, video, [cut]).windows, []);
+});
+
+test('groups adjacent motion peaks and adds context from supported windows', () => {
+  const windows = [.02, .16, .30, .14, .04, null, .01, .22, .02].map((swing, index) => ({
+    start: index / 2.5, end: (index + 1) / 2.5, swing, feet: null, lateral: .01,
+  }));
+  const intervals = movementExamples(windows, 'swing').map(({ start, end }) => [start.toFixed(2), end.toFixed(2)]);
+  assert.deepEqual(intervals, [['0.20', '1.85'], ['2.60', '3.45']]);
+  assert.deepEqual(movementExamples(windows, 'feet'), []);
+});
+
+test('movement replay stops at a missing tracking window or a cut', () => {
+  const windows = [
+    { start: 0, end: .4, swing: null, feet: null, lateral: .01 },
+    { start: .4, end: .8, swing: .31, feet: null, lateral: .01 },
+    { start: 1.2, end: 1.6, swing: .24, feet: null, lateral: .01 },
+  ];
+  assert.deepEqual(movementExamples(windows, 'swing'), [{ start: .4, end: .8 }, { start: 1.2, end: 1.6 }]);
 });

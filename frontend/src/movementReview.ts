@@ -64,6 +64,41 @@ function spread(points: (Point | null)[], height: number, aspect: number) {
 }
 
 type MovementWindow = { start: number; end: number; lateral: number; swing: number | null; feet: number | null };
+type MovementMetric = 'lateral' | 'swing' | 'feet';
+type PlaybackRange = Pick<MovementWindow, 'start' | 'end'>;
+
+export function movementExamples(windows: MovementWindow[], metric: MovementMetric) {
+  const ranked = windows.flatMap((window, index) => {
+    const value = window[metric];
+    return value === null || value < .06 ? [] : [{ index, value }];
+  }).sort((a, b) => b.value - a.value);
+  const examples: PlaybackRange[] = [];
+  const epsilon = 1e-6;
+
+  function connects(left: number, right: number) {
+    const a = windows[left], b = windows[right];
+    return !!a && !!b && a[metric] !== null && b[metric] !== null && Math.abs(a.end - b.start) <= epsilon;
+  }
+
+  for (const { index, value } of ranked) {
+    const threshold = Math.max(.06, .45 * value);
+    const peak = windows[index];
+    let left = index, right = index;
+    // Include nearby activity around the peak, with a cap for continuous drills.
+    while (connects(left - 1, left) && windows[left - 1][metric]! >= threshold &&
+           peak.start - windows[left - 1].start <= .8 + epsilon) left--;
+    while (connects(right, right + 1) && windows[right + 1][metric]! >= threshold &&
+           windows[right + 1].end - peak.end <= .8 + epsilon) right++;
+
+    const first = windows[left], last = windows[right];
+    const start = connects(left - 1, left) ? Math.max(windows[left - 1].start, first.start - .2) : first.start;
+    const end = connects(right, right + 1) ? Math.min(windows[right + 1].end, last.end + .25) : last.end;
+    if (examples.some(example => start < example.end + epsilon && end > example.start - epsilon)) continue;
+    examples.push({ start, end });
+    if (examples.length === 2) break;
+  }
+  return examples;
+}
 
 export function movementReview(tracks: PlayerTracks, trackId: number,
   video: Pick<Session['video'], 'width' | 'height' | 'duration'>, diagnostics: TrackingFrame[]) {
