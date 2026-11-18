@@ -44,3 +44,13 @@ test('keeps missing movement and missing hitter evidence out of the measured cou
   assert.deepEqual(unknown.players[0].examples, []);
   assert.equal(unknown.unassignedContacts, 1);
 });
+
+test('finds the players by their ball contacts when a spectator is also tracked', () => {
+  const tracks = playerTracks();
+  for (const players of tracks.frames.values()) {
+    players.push({ trackId: 3, playerId: null, box: { x: .4, y: 0, width: .18, height: .24 } });
+  }
+  const report = automaticRecovery(observations, fps, tracks, video, []);
+  assert.deepEqual(report.players.map(player => player.trackId), [1, 2]);
+  assert.equal(report.players[0].examples.length, 1);
+});

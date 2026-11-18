@@ -11,7 +11,7 @@ type RecoveryExample = { contact: number; nextContact: number; boxWidths: number
 
 // A fixed-view singles clip should have one pair in most frames that show
 // two or more people. Refuse to pick a side when identities keep changing.
-function dominantPair(tracks: PlayerTracks): number[] {
+function dominantPair(tracks: PlayerTracks, ball: BallObservation[], fps: number): number[] {
   const pairs = new Map<string, { ids: number[]; count: number }>();
   let multiPersonFrames = 0;
   for (const people of tracks.frames.values()) {
@@ -24,7 +24,23 @@ function dominantPair(tracks: PlayerTracks): number[] {
     entry.count++;
     pairs.set(key, entry);
   }
-  return [...pairs.values()].find(pair => pair.count > multiPersonFrames / 2)?.ids ?? [];
+  const clean = [...pairs.values()].find(pair => pair.count > multiPersonFrames / 2);
+  if (clean) return clean.ids;
+
+  // When officials or spectators are tracked, use observed turns with a
+  // uniquely supported hitter to identify the two active tracks.
+  const hits = new Map<number, number>();
+  for (const turn of detectShotCandidates(ball, fps, minimumBallScore, tracks)) {
+    if (turn.trackId !== null) hits.set(turn.trackId, (hits.get(turn.trackId) ?? 0) + 1);
+  }
+  const [first, second, third] = [...hits].sort((a, b) => b[1] - a[1]);
+  if (!second || (third && second[1] === third[1])) return [];
+  const ids = [first[0], second[0]].sort((a, b) => a - b);
+  let overlap = 0;
+  for (const people of tracks.frames.values()) {
+    if (ids.every(id => people.some(person => person.trackId === id))) overlap++;
+  }
+  return overlap > multiPersonFrames / 2 ? ids : [];
 }
 
 function motionBefore(time: number, contact: number, trackId: number, tracks: PlayerTracks, aspect: number) {
@@ -45,11 +61,11 @@ function motionBefore(time: number, contact: number, trackId: number, tracks: Pl
 
 export function automaticRecovery(observations: BallObservation[], fps: number, tracks: PlayerTracks,
   video: Pick<Session['video'], 'width' | 'height'>, diagnostics: TrackingFrame[]) {
-  const trackIds = dominantPair(tracks);
+  const ball = observations.filter(row => row.position.source === 'automatic' && (row.position.confidence ?? 0) >= minimumBallScore);
+  const trackIds = dominantPair(tracks, ball, fps);
   const byPlayer = trackIds.map(trackId => ({ trackId, contacts: 0, examples: [] as RecoveryExample[] }));
   if (!byPlayer.length) return { players: byPlayer, unassignedContacts: 0 };
 
-  const ball = observations.filter(row => row.position.source === 'automatic' && (row.position.confidence ?? 0) >= minimumBallScore);
   const turns = detectShotCandidates(ball, fps, minimumBallScore, tracks, new Set(trackIds));
   const cuts = diagnostics.filter(row => row.sceneCut);
   let ballIndex = 0, cutIndex = 0, unassignedContacts = 0;
