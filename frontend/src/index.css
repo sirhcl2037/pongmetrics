@@ -52,6 +52,15 @@
 .rally-list { display: flex; gap: 6px; flex-wrap: wrap; max-height: 145px; overflow-y: auto; list-style: none; margin: 10px 0; padding: 2px; }
 .rally-list button { display: flex; gap: 9px; align-items: baseline; padding: 7px 9px; background: #211b1f; color: #efdae4; border: 1px solid #58464f; border-radius: 5px; font-size: 12px; }
 .rally-list button[aria-pressed=true] { background: #42262e; border-color: #ef6565; }
+.shot-stepper { min-width: 0; margin: 16px 0; padding: 12px; border: 1px solid #58464f; border-radius: 8px; background: #211b1f; }
+.shot-stepper:focus-visible { outline: 2px solid #ef6565; outline-offset: 3px; }
+.shot-stepper h4 { margin: 0 0 10px; font-size: 14px; }
+.shot-stepper .workspace-tools span { font-size: 12px; color: #d9bfc8; }
+.shot-step-list { display: flex; gap: 6px; overflow-x: auto; list-style: none; margin: 10px 0 0; padding: 5px; }
+.shot-step-list li { flex: none; }
+.shot-step-list button { display: grid; gap: 3px; text-align: left; padding: 7px 9px; border: 1px solid #58464f; border-radius: 5px; color: #efdae4; background: #2b2529; font-size: 12px; }
+.shot-step-list button span { color: #d9bfc8; font-variant-numeric: tabular-nums; }
+.shot-step-list button[aria-current=step] { background: #42262e; border-color: #ef6565; }
 .rally-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 10px; margin-top: 12px; }
 .rally-fields label { display: grid; gap: 5px; color: #d9bfc8; font-size: 12px; }
 .rally-fields select, .rally-fields textarea { width: 100%; min-width: 0; border: 1px solid #58464f; border-radius: 5px; padding: 8px; background: #2b2529; color: #f2eeee; font: inherit; }

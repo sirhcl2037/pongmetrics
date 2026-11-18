@@ -21,8 +21,9 @@ function playerTracks(): PlayerTracks {
 
 test('tracks recovery without named players or manual contacts, and abstains at a scene cut', () => {
   const tracks = playerTracks();
-  const { players } = automaticRecovery(observations, fps, tracks, video, []);
+  const { players, turns } = automaticRecovery(observations, fps, tracks, video, []);
   assert.deepEqual(players.map(player => player.contacts), [1, 1]);
+  assert.deepEqual(turns.map(turn => [turn.timestamp, turn.trackId]), [[.2, 1], [.6, 2]]);
   const [example] = players[0].examples;
   assert.equal(example.contact, .2);
   assert.equal(example.nextContact, .6);
@@ -43,6 +44,13 @@ test('keeps missing movement and missing hitter evidence out of the measured cou
   const unknown = automaticRecovery(observations, fps, tracks, video, []);
   assert.deepEqual(unknown.players[0].examples, []);
   assert.equal(unknown.unassignedContacts, 1);
+  assert.deepEqual(unknown.turns.map(turn => turn.trackId), [1, null]);
+});
+
+test('keeps observed contact steps available with only ball tracks', () => {
+  const report = automaticRecovery(observations, fps, null, video, []);
+  assert.deepEqual(report.turns.map(turn => [turn.timestamp, turn.trackId]), [[.2, null], [.6, null]]);
+  assert.deepEqual(report.players, []);
 });
 
 test('finds the players by their ball contacts when a spectator is also tracked', () => {

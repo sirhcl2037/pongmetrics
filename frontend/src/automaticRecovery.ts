@@ -59,14 +59,15 @@ function motionBefore(time: number, contact: number, trackId: number, tracks: Pl
   return Math.hypot(dx, dy / aspect) / first.width;
 }
 
-export function automaticRecovery(observations: BallObservation[], fps: number, tracks: PlayerTracks,
+export function automaticRecovery(observations: BallObservation[], fps: number, tracks: PlayerTracks | null,
   video: Pick<Session['video'], 'width' | 'height'>, diagnostics: TrackingFrame[]) {
   const ball = observations.filter(row => row.position.source === 'automatic' && (row.position.confidence ?? 0) >= minimumBallScore);
-  const trackIds = dominantPair(tracks, ball, fps);
+  const trackIds = tracks ? dominantPair(tracks, ball, fps) : [];
   const byPlayer = trackIds.map(trackId => ({ trackId, contacts: 0, examples: [] as RecoveryExample[] }));
-  if (!byPlayer.length) return { players: byPlayer, unassignedContacts: 0 };
-
-  const turns = detectShotCandidates(ball, fps, minimumBallScore, tracks, new Set(trackIds));
+  const turns = trackIds.length
+    ? detectShotCandidates(ball, fps, minimumBallScore, tracks, new Set(trackIds))
+    : detectShotCandidates(ball, fps, minimumBallScore);
+  if (!tracks || !byPlayer.length) return { turns, players: byPlayer, unassignedContacts: turns.length };
   const cuts = diagnostics.filter(row => row.sceneCut);
   let ballIndex = 0, cutIndex = 0, unassignedContacts = 0;
   for (let i = 0; i < turns.length; i++) {
@@ -88,5 +89,5 @@ export function automaticRecovery(observations: BallObservation[], fps: number, 
     player.examples.push({ contact: current.timestamp, nextContact: next.timestamp,
       boxWidths: motionBefore(next.timestamp, current.timestamp, player.trackId, tracks, video.width / video.height) });
   }
-  return { players: byPlayer, unassignedContacts };
+  return { turns, players: byPlayer, unassignedContacts };
 }

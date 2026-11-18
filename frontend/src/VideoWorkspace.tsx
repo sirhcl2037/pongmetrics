@@ -342,7 +342,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
         </svg>
       </div>
     </div>
-    <AutomaticCoach video={metadata} videoRef={videoRef} observations={ballObservations} fps={ballFps}
+    <AutomaticCoach video={metadata} videoRef={videoRef} time={time} onSeek={setTime} observations={ballObservations} fps={ballFps}
       tracks={playerTracks} diagnostics={trackingFrames} status={coachStatus}
       disabled={ballTracking || trackingStatus.startsWith('Tracking')}
       onAnalyze={localTracking ? () => void generateBallTracks(true) : null}

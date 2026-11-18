@@ -4,10 +4,13 @@ import type { TrackingFrame } from './ballDetections';
 import type { PlayerTracks } from './playerTracks';
 import type { BallObservation, Session } from './session';
 import { formatVideoTime } from './videoFrames';
+import { ShotStepper } from './ShotStepper';
 
 type Props = {
   video: Session['video'] | null;
   videoRef: RefObject<HTMLVideoElement | null>;
+  time: number;
+  onSeek: (time: number) => void;
   observations: BallObservation[];
   fps: number;
   tracks: PlayerTracks | null;
@@ -18,8 +21,8 @@ type Props = {
   status: string;
 };
 
-export function AutomaticCoach({ video, videoRef, observations, fps, tracks, diagnostics, onAnalyze, onCancel, disabled, status }: Props) {
-  const report = useMemo(() => video && observations.length && tracks
+export function AutomaticCoach({ video, videoRef, time, onSeek, observations, fps, tracks, diagnostics, onAnalyze, onCancel, disabled, status }: Props) {
+  const report = useMemo(() => video && observations.length
     ? automaticRecovery(observations, fps, tracks, video, diagnostics) : null, [video, observations, fps, tracks, diagnostics]);
 
   function jump(time: number) {
@@ -27,18 +30,21 @@ export function AutomaticCoach({ video, videoRef, observations, fps, tracks, dia
     if (!video) return;
     video.pause();
     video.currentTime = time;
+    onSeek(video.currentTime);
   }
 
   return <section className="rally-review" aria-labelledby="automatic-coach-heading">
     <h3 id="automatic-coach-heading">Coach preview</h3>
-    <p>Use a short, fixed-camera singles clip to see how much each player moves just before the next estimated opponent contact.</p>
+    <p>Analyze a short, fixed-camera singles clip to step through both players’ estimated contacts.</p>
     {onAnalyze && <div className="workspace-tools">
       <button disabled={disabled || !video} onClick={onAnalyze}>Analyze clip</button>
       {onCancel && <button onClick={onCancel}>Cancel analysis</button>}
     </div>}
     {status && <p role="status">{status}</p>}
-    {!onAnalyze && !report && <p>Import matching ball detections and player tracks in Advanced tools.</p>}
-    {report && (report.players.length ? <>
+    {!onAnalyze && !report && <p>Import matching ball detections in Advanced tools to step through contacts.</p>}
+    {report && <ShotStepper steps={report.turns} time={time} readTime={() => videoRef.current?.currentTime ?? time} onJump={jump} />}
+    {report && !tracks && <p>Import matching player tracks in Advanced tools to show estimated hitters and movement.</p>}
+    {report && tracks && (report.players.length ? <>
       <p>Movement is the on-screen shift of the player’s box in the last {recoveryMotionSeconds * 1000} ms before the estimated contact. Check the examples against the video.</p>
       {!!report.unassignedContacts && <p>{report.unassignedContacts} contact estimates without a clear hitter.</p>}
       {report.players.map(player => {
