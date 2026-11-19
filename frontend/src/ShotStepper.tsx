@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import type { ShotCandidate } from './shotDetection';
 import { formatVideoTime } from './videoFrames';
 
@@ -21,9 +21,10 @@ type Props = {
   time: number;
   readTime: () => number;
   onJump: (time: number) => void;
+  renderContact: (step: ShotCandidate | undefined) => ReactNode;
 };
 
-export function ShotStepper({ steps, time, readTime, onJump }: Props) {
+export function ShotStepper({ steps, time, readTime, onJump, renderContact }: Props) {
   const { active, previous, next } = stepPosition(steps, time);
   const list = useRef<HTMLOListElement>(null);
 
@@ -72,6 +73,7 @@ export function ShotStepper({ steps, time, readTime, onJump }: Props) {
           </button>
         </li>)}
       </ol>
+      {renderContact(steps[active])}
       <p>Use ← and → while focused on the shot controls. Estimates can miss hits or include bounces. Ball-gap steps infer contact from the surrounding flight.</p>
     </>}
   </section>;

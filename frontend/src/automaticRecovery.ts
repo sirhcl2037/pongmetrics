@@ -1,13 +1,18 @@
 import type { TrackingFrame } from './ballDetections.ts';
 import type { PlayerTracks } from './playerTracks.ts';
-import type { BallObservation, Session } from './session.ts';
+import type { BallObservation } from './session.ts';
 import { detectShotCandidates } from './shotDetection.ts';
 
 export const recoveryMotionSeconds = .12;
 const minimumBallScore = .15;
 const maximumBallGap = .2;
 
-type RecoveryExample = { contact: number; nextContact: number; boxWidths: number | null };
+export type RecoveryExample = {
+  trackId: number;
+  contact: number;
+  nextContact: number;
+  motion: { horizontalWidths: number; seconds: number } | null;
+};
 
 // A fixed-view singles clip should have one pair in most frames that show
 // two or more people. Refuse to pick a side when identities keep changing.
@@ -43,24 +48,25 @@ function dominantPair(tracks: PlayerTracks, ball: BallObservation[], fps: number
   return overlap > multiPersonFrames / 2 ? ids : [];
 }
 
-function motionBefore(time: number, contact: number, trackId: number, tracks: PlayerTracks, aspect: number) {
-  const end = Math.round(time * tracks.fps);
-  const start = end - Math.round(recoveryMotionSeconds * tracks.fps);
-  if (end - start < 2 || start <= Math.round(contact * tracks.fps)) return null;
+function motionBefore(time: number, contact: number, trackId: number, tracks: PlayerTracks) {
+  const end = Math.floor(time * tracks.fps + 1e-6);
+  const start = Math.ceil((time - recoveryMotionSeconds) * tracks.fps - 1e-6);
+  if (end - start < 2 || start <= contact * tracks.fps) return null;
   const boxes = [];
   for (let frame = start; frame <= end; frame++) {
     const person = tracks.frames.get(frame)?.find(player => player.trackId === trackId);
-    if (!person) return null;
+    if (!person || person.box.x < .005 || person.box.x + person.box.width > .995) return null;
     boxes.push(person.box);
   }
+  const heights = boxes.map(box => box.height);
+  if (Math.max(...heights) > 1.45 * Math.min(...heights)) return null;
   const first = boxes[0], last = boxes[boxes.length - 1];
   const dx = (last.x + last.width / 2) - (first.x + first.width / 2);
-  const dy = (last.y + last.height / 2) - (first.y + first.height / 2);
-  return Math.hypot(dx, dy / aspect) / first.width;
+  return { horizontalWidths: dx / first.width, seconds: (end - start) / tracks.fps };
 }
 
 export function automaticRecovery(observations: BallObservation[], fps: number, tracks: PlayerTracks | null,
-  video: Pick<Session['video'], 'width' | 'height'>, diagnostics: TrackingFrame[]) {
+  diagnostics: TrackingFrame[]) {
   const ball = observations.filter(row => row.position.source === 'automatic' && (row.position.confidence ?? 0) >= minimumBallScore);
   const trackIds = tracks ? dominantPair(tracks, ball, fps) : [];
   const byPlayer = trackIds.map(trackId => ({ trackId, contacts: 0, examples: [] as RecoveryExample[] }));
@@ -86,8 +92,8 @@ export function automaticRecovery(observations: BallObservation[], fps: number, 
     while (ball[last].timestamp < next.timestamp && ball[last + 1] &&
            ball[last + 1].timestamp - ball[last].timestamp <= maximumBallGap + 1e-9) last++;
     if (ball[last].timestamp < next.timestamp) continue;
-    player.examples.push({ contact: current.timestamp, nextContact: next.timestamp,
-      boxWidths: motionBefore(next.timestamp, current.timestamp, player.trackId, tracks, video.width / video.height) });
+    player.examples.push({ trackId: player.trackId, contact: current.timestamp, nextContact: next.timestamp,
+      motion: motionBefore(next.timestamp, current.timestamp, player.trackId, tracks) });
   }
   return { turns, players: byPlayer, unassignedContacts };
 }

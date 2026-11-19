@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { movementExamples, type movementReview } from './movementReview';
+import { movementExamples, type MovementExample, type movementReview } from './movementReview';
 import type { RallyRange } from './rallies';
 import { formatVideoTime } from './videoFrames';
 
@@ -16,6 +16,14 @@ const metrics = [
   { key: 'feet', label: 'Foot movement', description: 'Ankle movement on screen.' },
   { key: 'lateral', label: 'Side-to-side movement', description: 'Horizontal movement of the player box.' },
 ] as const;
+
+function describeExample(metric: typeof metrics[number]['key'], { peak }: MovementExample) {
+  const percent = Math.round(peak.size * 100);
+  const scale = `about ${percent}% of the on-screen box height`;
+  if (metric === 'lateral') return `The player box shifted ${peak.side ? `${peak.side} ` : ''}on screen by ${scale}.`;
+  const joint = peak.side ? `Estimated ${peak.side} ${metric === 'swing' ? 'wrist' : 'ankle'}` : metric === 'swing' ? 'Estimated wrist' : 'Estimated ankle';
+  return metric === 'swing' ? `${joint} shifted by ${scale} relative to the shoulder.` : `${joint} shifted on screen by ${scale}.`;
+}
 
 export function MovementPreview({ trackId, report, onePlayer, selected, onReplay }: Props) {
   const [playbackError, setPlaybackError] = useState(false);
@@ -41,11 +49,15 @@ export function MovementPreview({ trackId, report, onePlayer, selected, onReplay
       {summaries.map(({ key, label, description, usable, examples }) => (
         <div key={key}>
           <p><strong>{label}</strong> · {usable}/{report.tested} windows measured. {description}</p>
-          {!!examples.length && <div className="workspace-tools">
+          {!!examples.length && <div>
             {examples.map(example => {
               const range = `${formatVideoTime(example.start)}–${formatVideoTime(example.end)}`;
-              return <button key={example.start} onClick={() => void playExample(example)}
-                aria-label={`Play ${label.toLowerCase()} example ${range} at half speed`}>Play {range}</button>;
+              const peak = `${formatVideoTime(example.peak.start)}–${formatVideoTime(example.peak.end)}`;
+              return <div key={example.start} className="workspace-tools">
+                <p><strong>{peak}</strong> · {describeExample(key, example)}</p>
+                <button onClick={() => void playExample(example)}
+                  aria-label={`Play ${label.toLowerCase()} example ${range} at half speed`}>Play {range}</button>
+              </div>;
             })}
           </div>}
         </div>

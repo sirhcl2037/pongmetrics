@@ -63,16 +63,21 @@ function spread(points: (Point | null)[], height: number, aspect: number) {
   return largest / height;
 }
 
-type MovementWindow = { start: number; end: number; lateral: number; swing: number | null; feet: number | null };
+type Side = 'left' | 'right';
+type MovementWindow = {
+  start: number; end: number; lateral: number; swing: number | null; feet: number | null;
+  lateralDirection?: Side; swingSide?: Side; feetSide?: Side;
+};
 type MovementMetric = 'lateral' | 'swing' | 'feet';
 type PlaybackRange = Pick<MovementWindow, 'start' | 'end'>;
+export type MovementExample = PlaybackRange & { peak: PlaybackRange & { size: number; side?: Side } };
 
 export function movementExamples(windows: MovementWindow[], metric: MovementMetric) {
   const ranked = windows.flatMap((window, index) => {
     const value = window[metric];
     return value === null || value < .06 ? [] : [{ index, value }];
   }).sort((a, b) => b.value - a.value);
-  const examples: PlaybackRange[] = [];
+  const examples: MovementExample[] = [];
   const epsilon = 1e-6;
 
   function connects(left: number, right: number) {
@@ -94,7 +99,8 @@ export function movementExamples(windows: MovementWindow[], metric: MovementMetr
     const start = connects(left - 1, left) ? Math.max(windows[left - 1].start, first.start - .2) : first.start;
     const end = connects(right, right + 1) ? Math.min(windows[right + 1].end, last.end + .25) : last.end;
     if (examples.some(example => start < example.end + epsilon && end > example.start - epsilon)) continue;
-    examples.push({ start, end });
+    const side = metric === 'swing' ? peak.swingSide : metric === 'feet' ? peak.feetSide : peak.lateralDirection;
+    examples.push({ start, end, peak: { start: peak.start, end: peak.end, size: value, side } });
     if (examples.length === 2) break;
   }
   return examples;
@@ -126,14 +132,17 @@ export function movementReview(tracks: PlayerTracks, trackId: number,
     const height = heights[2];
     if (heights[4] > 1.45 * heights[0]) continue;
     const centers = samples.map(({ box }) => box.x + box.width / 2);
-    function poseRange(point: (person: PlayerBox, side: 'left' | 'right') => Point | null) {
+    function poseRange(point: (person: PlayerBox, side: Side) => Point | null) {
       const left = spread(samples.map(person => point(person, 'left')), height, aspect);
       const right = spread(samples.map(person => point(person, 'right')), height, aspect);
-      return left === null ? right : right === null ? left : Math.max(left, right);
+      if (left !== null && (right === null || left >= right)) return { size: left, side: 'left' as const };
+      return { size: right, side: right === null ? undefined : 'right' as const };
     }
     const swing = poseRange(wristRelativeToShoulder), feet = poseRange(ankle);
-    windows.push({ start: startTime, end: endTime, swing, feet,
-      lateral: (Math.max(...centers) - Math.min(...centers)) * aspect / height });
+    const left = Math.min(...centers), right = Math.max(...centers);
+    windows.push({ start: startTime, end: endTime, swing: swing.size, swingSide: swing.side, feet: feet.size, feetSide: feet.side,
+      lateral: (right - left) * aspect / height,
+      lateralDirection: centers.indexOf(left) < centers.indexOf(right) ? 'right' : 'left' });
   }
   return { tested, windows };
 }

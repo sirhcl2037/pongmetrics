@@ -219,7 +219,7 @@ export function VideoWorkspace({ url, file, videoRef, shots, onShots, onTime, pl
       if (tracks) {
         if (!movementFirst) {
           const movementOnly = coachMode === 'auto' && (!parsed?.observations.length ||
-            !automaticRecovery(parsed.observations, parsed.fps, tracks, metadata, diagnostics).players.some(player => player.examples.length));
+            !automaticRecovery(parsed.observations, parsed.fps, tracks, diagnostics).players.some(player => player.examples.length));
           if (movementOnly && view?.trackId != null) tracks = await measureMovement(tracks, metadata);
           if (signal.aborted) return;
           showCoachTracks(tracks, movementOnly);
